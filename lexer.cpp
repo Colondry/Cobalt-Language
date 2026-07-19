@@ -1,0 +1,128 @@
+#include "lexer.hpp"
+#include <cctype>
+#include <unordered_map>
+
+static const std::unordered_map<std::string, TokenType> keywords = {
+    // Syntax
+    {"fn", TokenType::Fn}, {"ret", TokenType::Ret}, {"if", TokenType::If},
+    {"while", TokenType::While}, {"for", TokenType::For}, {"in", TokenType::In},
+    {"import", TokenType::Import},
+    {"print", TokenType::Print}, {"println", TokenType::PrintLine},
+    {"input", TokenType::Input},
+    
+    // Data Types
+    {"List", TokenType::List}, 
+    {"int", TokenType::TypeInt}, 
+    {"string", TokenType::TypeString},
+    {"float", TokenType::TypeFloat}, 
+    {"double", TokenType::TypeDouble},
+    {"byte", TokenType::TypeByte}, 
+    {"char", TokenType::TypeChar},
+    {"bool", TokenType::TypeBool},
+    {"void", TokenType::TypeVoid},
+};
+
+std::vector<Token> tokenize(const std::string& src) {
+    std::vector<Token> tokens;
+    size_t i = 0;
+    int line = 1;
+    size_t n = src.size();
+
+    auto push = [&](TokenType t, const std::string& text) {
+        tokens.push_back({ t, text, line });
+    };
+
+    while (i < n) {
+        char c = src[i];
+
+        if (c == '\n') { line++; i++; continue; }
+        if (std::isspace(static_cast<unsigned char>(c))) { i++; continue; }
+
+        // string literal
+        if (c == '"') {
+            std::string s = "\"";
+            i++;
+            while (i < n && src[i] != '"') {
+                if (src[i] == '\\' && i + 1 < n) { s += src[i]; s += src[i + 1]; i += 2; continue; }
+                if (src[i] == '\n') break; // don't let a string swallow the rest of the file
+                s += src[i];
+                i++;
+            }
+            if (i >= n || src[i] != '"') {
+                push(TokenType::Invalid, "unterminated string literal " + s);
+                continue; // don't advance past EOF/newline; let the outer loop handle it
+            }
+            s += '"';
+            i++; // closing quote
+            push(TokenType::String, s);
+            continue;
+        }
+
+        // number literal (int or float)
+        if (std::isdigit(static_cast<unsigned char>(c))) {
+            std::string num;
+            while (i < n && (std::isdigit(static_cast<unsigned char>(src[i])) || src[i] == '.')) {
+                num += src[i];
+                i++;
+            }
+            push(TokenType::Number, num);
+            continue;
+        }
+
+        // identifier / keyword
+        if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
+            std::string word;
+            while (i < n && (std::isalnum(static_cast<unsigned char>(src[i])) || src[i] == '_')) {
+                word += src[i];
+                i++;
+            }
+            auto it = keywords.find(word);
+            if (it != keywords.end()) push(it->second, word);
+            else push(TokenType::Identifier, word);
+            continue;
+        }
+
+        // two-character operators
+        if (i + 1 < n) {
+            std::string two = src.substr(i, 2);
+            if (two == "==") { push(TokenType::Eq, two); i += 2; continue; }
+            if (two == "!=") { push(TokenType::Neq, two); i += 2; continue; }
+            if (two == "<=") { push(TokenType::Le, two); i += 2; continue; }
+            if (two == ">=") { push(TokenType::Ge, two); i += 2; continue; }
+            if (two == "&&") { push(TokenType::AndAnd, two); i += 2; continue; }
+            if (two == "||") { push(TokenType::OrOr, two); i += 2; continue; }
+            if (two == "<<") { push(TokenType::Shl, two); i += 2; continue; }
+            if (two == ">>") { push(TokenType::Shr, two); i += 2; continue; }
+            if (two == "::") { push(TokenType::DoubleColon, two); i += 2; continue; }
+            if (two == "++") { push(TokenType::PlusPlus, two); i += 2; continue; }
+        }
+
+        // single-character tokens
+        switch (c) {
+            case '(': push(TokenType::LParen, "("); break;
+            case ')': push(TokenType::RParen, ")"); break;
+            case '{': push(TokenType::LBrace, "{"); break;
+            case '}': push(TokenType::RBrace, "}"); break;
+            case '[': push(TokenType::LBracket, "["); break;
+            case ']': push(TokenType::RBracket, "]"); break;
+            case ',': push(TokenType::Comma, ","); break;
+            case ';': push(TokenType::Semicolon, ";"); break;
+            case ':': push(TokenType::Colon, ":"); break;
+            case '@': push(TokenType::At, "@"); break;
+            case '=': push(TokenType::Assign, "="); break;
+            case '<': push(TokenType::Lt, "<"); break;
+            case '>': push(TokenType::Gt, ">"); break;
+            case '+': push(TokenType::Plus, "+"); break;
+            case '-': push(TokenType::Minus, "-"); break;
+            case '*': push(TokenType::Star, "*"); break;
+            case '/': push(TokenType::Slash, "/"); break;
+            default:
+                push(TokenType::Invalid, std::string(1, c));
+                break;
+        }
+        i++;
+    }
+
+    push(TokenType::EndOfFile, "");
+    return tokens;
+}
