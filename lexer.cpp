@@ -4,11 +4,14 @@
 
 static const std::unordered_map<std::string, TokenType> keywords = {
     // Syntax
-    {"fn", TokenType::Fn}, {"ret", TokenType::Ret}, {"if", TokenType::If},
+    {"fn", TokenType::Fn}, {"ret", TokenType::Ret}, 
+    {"if", TokenType::If}, {"elif", TokenType::Elif}, {"else", TokenType::Else},
     {"while", TokenType::While}, {"for", TokenType::For}, {"in", TokenType::In},
     {"import", TokenType::Import},
     {"print", TokenType::Print}, {"println", TokenType::PrintLine},
-    {"input", TokenType::Input},
+    {"input", TokenType::Input}, {"inputstr", TokenType::InputString},
+    {"continue", TokenType::Continue}, {"break", TokenType::Break},
+    {"clear", TokenType::Clear},
     
     // Data Types
     {"List", TokenType::List}, 
@@ -50,11 +53,30 @@ std::vector<Token> tokenize(const std::string& src) {
             }
             if (i >= n || src[i] != '"') {
                 push(TokenType::Invalid, "unterminated string literal " + s);
-                continue; // don't advance past EOF/newline; let the outer loop handle it
+                continue; // don't advance past EOF/newline
             }
             s += '"';
             i++; // closing quote
             push(TokenType::String, s);
+            continue;
+        }
+
+        // char literal
+        if (c == '\'') {
+            std::string s = "";
+            i++;
+            while (i < n && src[i] != '\'') {
+                if (src[i] == '\\' && i + 1 < n) { s += src[i]; s += src[i + 1]; i += 2; continue; }
+                if (src[i] == '\n') break; // don't let a char swallow the rest of the file
+                s += src[i];
+                i++;
+            }
+            if (i >= n || src[i] != '\'') {
+                push(TokenType::Invalid, "unterminated char literal " + s);
+                continue; // don't advance past EOF/newline
+            }
+            i++; // closing quote
+            push(TokenType::Char, s); // treat char literals as strings for simplicity
             continue;
         }
 
@@ -95,6 +117,11 @@ std::vector<Token> tokenize(const std::string& src) {
             if (two == ">>") { push(TokenType::Shr, two); i += 2; continue; }
             if (two == "::") { push(TokenType::DoubleColon, two); i += 2; continue; }
             if (two == "++") { push(TokenType::PlusPlus, two); i += 2; continue; }
+            if (two == "--") { push(TokenType::MinusMinus, two); i += 2; continue; }
+            if (two == "+=") { push(TokenType::AssignAdd, two); i += 2; continue; }
+            if (two == "-=") { push(TokenType::AssignMinus, two); i += 2; continue; }
+            if (two == "*=") { push(TokenType::AssignMulti, two); i += 2; continue; }
+            if (two == "/=") { push(TokenType::AssignSlash, two); i += 2; continue; }
         }
 
         // single-character tokens
@@ -116,6 +143,7 @@ std::vector<Token> tokenize(const std::string& src) {
             case '-': push(TokenType::Minus, "-"); break;
             case '*': push(TokenType::Star, "*"); break;
             case '/': push(TokenType::Slash, "/"); break;
+            case '.': push(TokenType::Dot, "."); break;
             default:
                 push(TokenType::Invalid, std::string(1, c));
                 break;
