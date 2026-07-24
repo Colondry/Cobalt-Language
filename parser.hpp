@@ -6,19 +6,25 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <unordered_set>
 
 class Parser
 {
 public:
+    Program program;
+    Parser() = default;
     explicit Parser(std::vector<Token> tokens);
 
     // Entry point: parses the whole token stream into a Program.
     Program parse();
 
     std::vector<std::string> errors;
+    
 
 private:
+    
     std::vector<Token> tokens;
+    
     size_t current = 0;
 
     // ---------- Core cursor / matching infra (defined in parser.cpp) ----------
@@ -48,6 +54,7 @@ private:
     ExprPtr parseUnary();          // unary -
     ExprPtr parsePostfix();        // x[i], x++
     ExprPtr parsePrimary();        // literals, ( ), names, calls
+    StmtPtr parseAssignAMMS();     // +=, -=, *=, /=
 
     // ---------- Statements (baseutils.cpp) ----------
     std::vector<StmtPtr> parseBlock();
@@ -55,11 +62,17 @@ private:
     StmtPtr parseAssignOrExprStatement();
     StmtPtr parseReturn();
     StmtPtr parseIf();
+    StmtPtr parseElse();
+    StmtPtr parseElif();
     StmtPtr parseWhile();
     StmtPtr parseForRange();
     StmtPtr parseStatement();
     StmtPtr parsePrintCode();
     StmtPtr parseInputCode();
+    StmtPtr parseInputStringCode();
+    StmtPtr parseContinue();
+    StmtPtr parseBreak();
+    StmtPtr parseClear();
 
     // ---------- Top level (baseutils.cpp) ----------
     void parseImport(Program& prog);
