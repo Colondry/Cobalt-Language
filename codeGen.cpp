@@ -26,6 +26,7 @@ static std::string emitConcatPieces(const std::shared_ptr<ConcatExpr>& c) {
 static std::string emitExpr(const ExprPtr& e) {
     if (auto n = std::dynamic_pointer_cast<NumberLit>(e)) return n->value;
     if (auto s = std::dynamic_pointer_cast<StringLit>(e)) return s->value;
+    if (auto c = std::dynamic_pointer_cast<CharLit>(e)) return c->value;
     if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return id->name;
     if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) return "(-" + emitExpr(u->operand) + ")";
     if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e))
@@ -57,48 +58,83 @@ static std::string emitExpr(const ExprPtr& e) {
         }
         return out + ")";
     }
-    return "/* unknown expr */";
+    if (auto m = std::dynamic_pointer_cast<MemberExpr>(e)) {
+        return emitExpr(m->object) + "." + m->member; // Assuming member access is valid in C++
+    }
+    if (auto mc = std::dynamic_pointer_cast<MethodCallExpr>(e)) {
+        std::string out = emitExpr(mc->object);
+        out += ".";
+        out += mc->method;
+        out += "(";
+
+        for (size_t i = 0; i < mc->args.size(); i++)
+        {
+            if (i) out += ", ";
+            out += emitExpr(mc->args[i]);
+        }
+
+        out += ")";
+        return out;
+    }
+    throw std::runtime_error("Unknown expression.");
 }
 
-static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::string& out) {
-    out += indent(depth) + "std::cout";
+static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
+    out << indent(depth) << "std::cout";
     if (value) {
         if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value)) {
-            out += " << " + emitConcatPieces(c);
+            out << " << " << emitConcatPieces(c);
         } else {
-            out += " << " + emitExpr(value);
+            out << " << " << emitExpr(value);
         }
     }
-    if (newline) out += " << \"\\n\"";
-    out += ";\n";
+    if (newline) out << " << \"\\n\"";
+    out << ";\n";
 }
 
-static void emitStmt(const StmtPtr& stmt, int depth, std::string& out);
+static void emitContinueStmt(int depth, std::ofstream& out) {
+    out << indent(depth) << "continue;\n";
+}
 
-static void emitBlock(const std::vector<StmtPtr>& body, int depth, std::string& out) {
+static void emitBreakStmt(int depth, std::ofstream& out) {
+    out << indent(depth) << "break;\n";
+}
+
+static void emitClearStmt(int depth, std::ofstream& out) {
+    #ifdef _WIN32
+    out << indent(depth) << "system(\"cls\");\n";
+    #else
+    out << indent(depth) << "std::cout << \"\\033[2J\\033[H\";\n";
+    out << indent(depth) << "std::cout.flush();\n";
+    #endif
+}
+
+static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out);
+
+static void emitBlock(const std::vector<StmtPtr>& body, int depth, std::ofstream& out) {
     for (const auto& s : body) emitStmt(s, depth, out);
 }
 
-static void emitStmt(const StmtPtr& stmt, int depth, std::string& out) {
+static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     if (auto v = std::dynamic_pointer_cast<VarDecl>(stmt)) {
-        out += indent(depth);
+        out << indent(depth);
         if (v->type == "List") {
-            out += "std::vector<" + cppType(v->elemType) + "> " + v->name;
+            out << "std::vector<" << cppType(v->elemType) << "> " << v->name;
         } else if (v->arraySize >= 0) {
-            out += cppType(v->type) + " " + v->name + "[" + std::to_string(v->arraySize) + "]";
+            out << cppType(v->type) << " " << v->name << "[" << v->arraySize << "]";
         } else {
-            out += cppType(v->type) + " " + v->name;
+            out << cppType(v->type) << " " << v->name;
         }
-        if (v->init) out += " = " + emitExpr(v->init);
-        out += ";\n";
+        if (v->init) out << " = " << emitExpr(v->init);
+        out << ";\n";
         return;
     }
     if (auto a = std::dynamic_pointer_cast<AssignStmt>(stmt)) {
-        out += indent(depth) + a->name + " = " + emitExpr(a->value) + ";\n";
+        out << indent(depth) << a->name << " = " << emitExpr(a->value) << ";\n";
         return;
     }
     if (auto r = std::dynamic_pointer_cast<ReturnStmt>(stmt)) {
-        out += indent(depth) + "return" + (r->value ? " " + emitExpr(r->value) : "") + ";\n";
+        out << indent(depth) << "return" << (r->value ? " " + emitExpr(r->value) : "") << ";\n";
         return;
     }
     if (auto p = std::dynamic_pointer_cast<PrintCode>(stmt)) {
@@ -107,32 +143,81 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::string& out) {
     }
     if (auto in = std::dynamic_pointer_cast<InputCode>(stmt)) {
         if (in->prompt) {
-            out += indent(depth) + "std::cout << " + emitExpr(in->prompt) + ";\n";
+            out << indent(depth) << "std::cout << " << emitExpr(in->prompt) << ";\n";
         }
-        out += indent(depth) + "std::cin >> " + in->varName + ";\n";
+        out << indent(depth) << "std::cin >> " << in->varName << ";\n";
+        return;
+    }
+    if (auto inStr = std::dynamic_pointer_cast<InputString>(stmt)) {
+        if (inStr->prompt) {
+            out << indent(depth) << "std::cout << " << emitExpr(inStr->prompt) << ";\n";
+        }
+        out << indent(depth) << "std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\\n');\n";
+        out << indent(depth) << "std::getline(std::cin, " << inStr->varName << ", " << (inStr->limit.empty() ? "std::numeric_limits<std::streamsize>::max()" :
+                                                                                                                "" + inStr->limit + "") << ");\n";
         return;
     }
     if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmt)) {
-        out += indent(depth) + emitExpr(es->expr) + ";\n";
+        out << indent(depth) << emitExpr(es->expr) << ";\n";
         return;
     }
     if (auto i = std::dynamic_pointer_cast<IfStmt>(stmt)) {
-        out += indent(depth) + "if (" + emitExpr(i->condition) + ") {\n";
+        out << indent(depth) << "if (" << emitExpr(i->condition) << ") {\n";
         emitBlock(i->body, depth + 1, out);
-        out += indent(depth) + "}\n";
+        out << indent(depth) << "}\n";
+        return;
+    }
+    if (auto e = std::dynamic_pointer_cast<ElifStmt>(stmt)) {
+        out << indent(depth) << "else if (" << emitExpr(e->condition) << ") {\n";
+        emitBlock(e->body, depth + 1, out);
+        out << indent(depth) << "}\n";
+        return;
+    }
+    if (auto e = std::dynamic_pointer_cast<ElseStmt>(stmt)) {
+        out << indent(depth) << "else {\n";
+        emitBlock(e->body, depth + 1, out);
+        out << indent(depth) << "}\n";
         return;
     }
     if (auto w = std::dynamic_pointer_cast<WhileStmt>(stmt)) {
-        out += indent(depth) + "while (" + emitExpr(w->condition) + ") {\n";
+        out << indent(depth) << "while (" << emitExpr(w->condition) << ") {\n";
         emitBlock(w->body, depth + 1, out);
-        out += indent(depth) + "}\n";
+        out << indent(depth) << "}\n";
         return;
     }
     if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(stmt)) {
-        out += indent(depth) + "for (int " + f->varName + " = " + emitExpr(f->from) + "; " +
-               f->varName + " <= " + emitExpr(f->to) + "; " + f->varName + "++) {\n";
+        out << indent(depth) << "for (int " << f->varName << " = " << emitExpr(f->from) << "; " <<
+               f->varName << " <= " << emitExpr(f->to) << "; " << f->varName << "++) {\n";
         emitBlock(f->body, depth + 1, out);
-        out += indent(depth) + "}\n";
+        out << indent(depth) << "}\n";
+        return;
+    }
+    if (auto c = std::dynamic_pointer_cast<ContinueStmt>(stmt)) {
+        emitContinueStmt(depth, out);
+        return;
+    }
+    if (auto b = std::dynamic_pointer_cast<BreakStmt>(stmt)) {
+        emitBreakStmt(depth, out);
+        return;
+    }
+    if (auto b = std::dynamic_pointer_cast<ClearStmt>(stmt)) {
+        emitClearStmt(depth, out);
+        return;
+    }
+    if (auto cl = std::dynamic_pointer_cast<MethodCallExpr>(stmt)) {
+        out << indent(depth);
+        out << emitExpr(cl->object);   // Convert ExprPtr to string
+        out << ".";
+        out << cl->method;
+        out << "(";
+
+        for (size_t i = 0; i < cl->args.size(); i++)
+        {
+            if (i) out << ", ";
+            out << emitExpr(cl->args[i]);
+        }
+
+        out << ");\n";
         return;
     }
 
@@ -147,7 +232,7 @@ static std::string emitSignature(const FunctionDecl& fn) {
         if (i) out += ", ";
         out += cppType(fn.params[i].type) + " " + fn.params[i].name;
     }
-    return out + ")";
+    return out += ")";
 }
 
 void codeGen(Program& program, std::string fileName) {
@@ -162,6 +247,7 @@ void codeGen(Program& program, std::string fileName) {
     file << "#include <string>\n";
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
+    file << "#include <limits>\n";
 
     for (const LibImport& imp : program.imports) {
         file << "#include \"" << imp.libName << ".hpp\"\n";
@@ -172,12 +258,15 @@ void codeGen(Program& program, std::string fileName) {
         file << emitSignature(fn) << ";\n";
     }
     file << "\n";
+    std::cout << "used objects:\n";
+    for(auto& obj : program.usedObjects)
+    {
+        file << "__" << obj << "__ " << obj << ";\n";
+    }
 
     for (const FunctionDecl& fn : program.functions) {
         file << emitSignature(fn) << " {\n";
-        std::string body;
-        emitBlock(fn.body, 1, body);
-        file << body;
+        emitBlock(fn.body, 1, file); 
         file << "}\n\n";
     }
 }
