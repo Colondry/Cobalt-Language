@@ -16,7 +16,7 @@
 
 ```cobalt
 fn main(): int {
-    println("Hello, World!);
+    println("Hello, World!");
     ret 0;
 }
 ```
