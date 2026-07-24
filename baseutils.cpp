@@ -1,5 +1,9 @@
 #include "baseutils.hpp"
+#include "ast.hpp"
 #include <cstdlib>
+#include <iostream>
+#include <algorithm>
+#include <unordered_set>
 
 // ---------- Type tokens ----------
 
@@ -35,6 +39,7 @@ std::string Parser::expectType() {
 
 // ---------- Expressions ----------
 
+// Helper for parsing binary expressions with a given precedence level.
 ExprPtr Parser::parseBinaryLevel(const std::function<ExprPtr()>& parseNextLevel,
                                   const std::function<std::string(TokenType)>& operatorFor) {
     ExprPtr left = parseNextLevel();
@@ -51,6 +56,7 @@ ExprPtr Parser::parseBinaryLevel(const std::function<ExprPtr()>& parseNextLevel,
     return left;
 }
 
+// --------- Expression parsing, lowest to highest precedence ----------
 ExprPtr Parser::parseExpression() {
     ExprPtr base = parseLogicalOr();
     if (!check(TokenType::Shl) && !check(TokenType::Shr)) return base;
@@ -61,24 +67,27 @@ ExprPtr Parser::parseExpression() {
         bool isShl = check(TokenType::Shl);
         advance();
         ExprPtr rhs = parseLogicalOr();
-        if (isShl) chain->pieces.push_back(rhs);
-        else chain->pieces.insert(chain->pieces.begin(), rhs);
+        if (isShl) chain->pieces.insert(chain->pieces.begin(), rhs);  // '<<' -> starts from the right
+        else chain->pieces.push_back(rhs);                            // '>>' -> starts from the left
     }
     return chain;
 }
 
+// Parses a logical OR expression (||)
 ExprPtr Parser::parseLogicalOr() {
     return parseBinaryLevel(
         [this] { return parseLogicalAnd(); },
         [](TokenType t) -> std::string { return t == TokenType::OrOr ? "||" : ""; });
 }
 
+// Parses a logical AND expression (&&)
 ExprPtr Parser::parseLogicalAnd() {
     return parseBinaryLevel(
         [this] { return parseEquality(); },
         [](TokenType t) -> std::string { return t == TokenType::AndAnd ? "&&" : ""; });
 }
 
+// Parses an equality expression (==, !=)
 ExprPtr Parser::parseEquality() {
     return parseBinaryLevel(
         [this] { return parseComparison(); },
@@ -89,6 +98,7 @@ ExprPtr Parser::parseEquality() {
         });
 }
 
+// Parses a comparison expression (<, >, <=, >=)
 ExprPtr Parser::parseComparison() {
     return parseBinaryLevel(
         [this] { return parseAdditive(); },
@@ -103,6 +113,7 @@ ExprPtr Parser::parseComparison() {
         });
 }
 
+// Parses an additive expression (+, -)
 ExprPtr Parser::parseAdditive() {
     return parseBinaryLevel(
         [this] { return parseMultiplicative(); },
@@ -113,6 +124,7 @@ ExprPtr Parser::parseAdditive() {
         });
 }
 
+// Parses a multiplicative expression (*, /)
 ExprPtr Parser::parseMultiplicative() {
     return parseBinaryLevel(
         [this] { return parseUnary(); },
@@ -123,6 +135,7 @@ ExprPtr Parser::parseMultiplicative() {
         });
 }
 
+// Parses a unary expression (-, !)
 ExprPtr Parser::parseUnary() {
     if (check(TokenType::Minus)) {
         advance();
@@ -133,30 +146,92 @@ ExprPtr Parser::parseUnary() {
     return parsePostfix();
 }
 
+// Parses a postfix expression (x[i], x++)
+StmtPtr Parser::parseAssignAMMS() {
+    if (check(TokenType::Identifier) && current + 1 < tokens.size()) {
+        TokenType nextType = tokens[current + 1].type;
+        if (nextType == TokenType::AssignAdd || nextType == TokenType::AssignMinus ||
+            nextType == TokenType::AssignMulti || nextType == TokenType::AssignSlash) {
+            std::string name = advance().text;
+            std::string op = advance().text; // +=, -=, *=, /=
+            auto stmt = std::make_shared<AssignStmt>();
+            stmt->name = name;
+            auto binary = std::make_shared<BinaryExpr>();
+            binary->op = op.substr(0, 1); // convert "+=" to "+", "-=" to "-", etc.
+            auto nameExpr = std::make_shared<NameExpr>();
+            nameExpr->name = name;
+            binary->lhs = nameExpr;
+            binary->rhs = parseExpression();
+            stmt->value = binary;
+            return stmt;
+        }
+    }
+    return nullptr;
+}
+
+//---------- Primary expressions ----------
 ExprPtr Parser::parsePostfix() {
     ExprPtr expr = parsePrimary();
     while (true) {
-        if (match(TokenType::LBracket)) {
+        if (match(TokenType::LBracket)) { // ()
             auto idx = std::make_shared<IndexExpr>();
             idx->base = expr;
             idx->index = parseExpression();
             expect(TokenType::RBracket, "]");
             expr = idx;
-        } else if (check(TokenType::PlusPlus)) {
+        } else if (check(TokenType::PlusPlus)) { // ++
             if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
                 advance();
                 auto inc = std::make_shared<PostIncExpr>();
                 inc->name = name->name;
                 expr = inc;
+            } else {
+                reportError("'++' can only be applied to a variable name");
+                advance(); // consume the '++' so we don't loop forever
+                break;
             }
-            break; // only one postfix ++ allowed
-        } else {
+        } else if(match(TokenType::Dot)) {
+            Token member =
+                expect(TokenType::Identifier, "member name after '.'");
+
+            if(match(TokenType::LParen))
+            {
+                auto call =
+                    std::make_shared<MethodCallExpr>();
+
+                call->object = expr; // the object on which the method is called
+                call->method = member.text; // the method name
+                
+                if(auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
+                    program.usedObjects.insert(name->name);
+                }
+
+                if(!check(TokenType::RParen)) {
+                    do {
+                        call->args.push_back(parseExpression());
+                    }
+                    while(match(TokenType::Comma));
+                }
+                expect(TokenType::RParen, ")");
+                expr = call;
+            }
+            else {
+                auto m =
+                    std::make_shared<MemberExpr>();
+
+                m->object = expr;
+                m->member = member.text;
+
+                expr = m;
+            }
+        }else {
             break;
         }
     }
     return expr;
 }
 
+// Parses a primary expression
 ExprPtr Parser::parsePrimary() {
     if (check(TokenType::Number)) {
         auto lit = std::make_shared<NumberLit>();
@@ -166,6 +241,11 @@ ExprPtr Parser::parsePrimary() {
     if (check(TokenType::String)) {
         auto lit = std::make_shared<StringLit>();
         lit->value = advance().text;
+        return lit;
+    }
+    if (check(TokenType::Char)) {
+        auto lit = std::make_shared<CharLit>();
+        lit->value = "'" + advance().text + "'";
         return lit;
     }
     if (check(TokenType::LBracket)) {
@@ -224,8 +304,9 @@ StmtPtr Parser::parseVarDecl() {
         advance(); // 'List'
         auto decl = std::make_shared<VarDecl>();
         decl->type = "List";
-        expect(TokenType::DoubleColon, "::");
+        expect(TokenType::Lt, "<");
         decl->elemType = expectType();
+        expect(TokenType::Gt, ">");
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
 
@@ -242,7 +323,6 @@ StmtPtr Parser::parseVarDecl() {
         expect(TokenType::Semicolon, ";");
         return decl;
     }
-
     auto decl = std::make_shared<VarDecl>();
     decl->type = expectType();
     Token nameTok = expect(TokenType::Identifier, "variable name");
@@ -261,6 +341,11 @@ StmtPtr Parser::parseVarDecl() {
 }
 
 StmtPtr Parser::parseAssignOrExprStatement() {
+    if (auto amms = parseAssignAMMS()) {
+        expect(TokenType::Semicolon, ";");
+        return amms;
+    }
+
     if (check(TokenType::Identifier) && current + 1 < tokens.size() &&
         tokens[current + 1].type == TokenType::Assign) {
         std::string name = advance().text;
@@ -293,6 +378,21 @@ StmtPtr Parser::parseIf() {
     advance(); // 'if'
     auto stmt = std::make_shared<IfStmt>();
     stmt->condition = parseExpression();
+    stmt->body = parseBlock();
+    return stmt;
+}
+
+StmtPtr Parser::parseElif() {
+    advance(); // 'elif'
+    auto stmt = std::make_shared<ElifStmt>();
+    stmt->condition = parseExpression();
+    stmt->body = parseBlock();
+    return stmt;
+}
+
+StmtPtr Parser::parseElse() {
+    advance(); // 'else'
+    auto stmt = std::make_shared<ElseStmt>();
     stmt->body = parseBlock();
     return stmt;
 }
@@ -365,17 +465,83 @@ StmtPtr Parser::parseInputCode() {
     return stmt;
 }
 
+StmtPtr Parser::parseInputStringCode() {
+    advance(); // 'inputstr'
+    expect(TokenType::LParen, "(");
+
+    auto stmt = std::make_shared<InputString>();
+
+    ExprPtr firstOperand = parseLogicalOr();
+
+    if (check(TokenType::Shr)) {
+        // inputstr("prompt" >> var)
+        advance(); // '>>'
+        stmt->prompt = firstOperand; // any expression is fine as a prompt, not just string literals
+        Token nameTok = expect(TokenType::Identifier, "variable name after '>>'");
+        stmt->varName = nameTok.text;
+    } else if (auto name = std::dynamic_pointer_cast<NameExpr>(firstOperand)) {
+        // inputstr(var
+        stmt->varName = name->name;
+    } else {
+        reportError("expected a variable name inside inputstr(...), like inputstr(x) or inputstr(\"prompt\" >> x)");
+    }
+
+    if (match(TokenType::Comma)) {
+        // inputstr(..., 'limit')
+        if (!check(TokenType::Char)) {
+            reportError("expected a char literal for the limit in inputstr(..., limit)");
+        }
+        ExprPtr limitExpr = parseExpression();
+        if (auto limitLit = std::dynamic_pointer_cast<CharLit>(limitExpr)) {
+            stmt->limit = limitLit->value;
+        } else {
+            reportError("expected a char literal for the limit in inputstr(..., limit)");
+        } 
+    } else {
+        stmt->limit = ""; // no limit specified
+    }
+
+    expect(TokenType::RParen, ")");
+    expect(TokenType::Semicolon, ";");
+    return stmt;
+}
+
+StmtPtr Parser::parseContinue() {
+    advance(); // 'continue'
+    auto stmt = std::make_shared<ContinueStmt>();
+    expect(TokenType::Semicolon, ";");
+    return stmt;
+}
+
+StmtPtr Parser::parseBreak() {
+    advance(); // 'break'
+    auto stmt = std::make_shared<BreakStmt>();
+    expect(TokenType::Semicolon, ";");
+    return stmt;
+}
+
+StmtPtr Parser::parseClear() {
+    advance(); // clear
+    auto stmt = std::make_shared<ClearStmt>();
+    expect(TokenType::LParen, "("); expect(TokenType::RParen, ")");
+    expect(TokenType::Semicolon, ";");
+    return stmt;
+}
+
 StmtPtr Parser::parseStatement() {
-    // Add a new statement kind by adding one more check() here (or a
-    // second isTypeToken()-style helper) and its own parseWhatever()
-    // method above, following the same pattern as parseIf/parseWhile.
     if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
     if (check(TokenType::Ret)) return parseReturn();
     if (check(TokenType::If)) return parseIf();
+    if (check(TokenType::Elif)) return parseElif();
+    if (check(TokenType::Else)) return parseElse();
     if (check(TokenType::While)) return parseWhile();
     if (check(TokenType::For)) return parseForRange();
     if (check(TokenType::Print) || check(TokenType::PrintLine)) return parsePrintCode();
     if (check(TokenType::Input)) return parseInputCode();
+    if (check(TokenType::Continue)) return parseContinue();
+    if (check(TokenType::Break)) return parseBreak();
+    if (check(TokenType::Clear)) return parseClear();
+    if (check(TokenType::InputString)) return parseInputStringCode();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
 
     reportError("unexpected token '" + peek().text + "'");
