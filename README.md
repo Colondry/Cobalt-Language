@@ -10,7 +10,6 @@
 * 🚀 Compiles to modern C++
 * ⚡ Fast native performance
 * 📚 Simple syntax
-* 🌍 Cross-platform (Windows & Linux)
 
 ## Example
 
