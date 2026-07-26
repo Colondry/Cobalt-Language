@@ -8,6 +8,8 @@
 
 // ---------- Expressions ----------
 
+class Param { public: std::string type; std::string name; };
+
 class Expr {
 public:
     virtual ~Expr() = default;
@@ -17,21 +19,18 @@ using ExprPtr = std::shared_ptr<Expr>;
 class NumberLit : public Expr { public: std::string value; };
 class StringLit : public Expr { public: std::string value; }; // includes quotes
 class CharLit : public Expr { public: std::string value; }; // includes single quotes
-class NameExpr  : public Expr { public: std::string name; };
-class ListLit    : public Expr { public: std::vector<ExprPtr> items; };
-class IndexExpr  : public Expr { public: ExprPtr base; ExprPtr index; };
-class CallExpr   : public Expr { public: std::string callee; std::vector<ExprPtr> args; };
-class PostIncExpr: public Expr { public: std::string name; };
-class UnaryExpr  : public Expr { public: std::string op; ExprPtr operand; };
+class NameExpr : public Expr { public: std::string name; };
+class ListLit : public Expr { public: std::vector<ExprPtr> items; double index; };
+class IndexExpr : public Expr { public: ExprPtr base; ExprPtr index; };
+class CallExpr : public Expr { public: std::string callee; std::vector<ExprPtr> args; };
+class PostIncExpr : public Expr { public: std::string name; };
+class UnaryExpr : public Expr { public: std::string op; ExprPtr operand; };
 class BinaryExpr : public Expr { public: std::string op; ExprPtr lhs; ExprPtr rhs; };
 
 class ConcatExpr : public Expr {
 public:
     std::vector<ExprPtr> pieces;
 };
-
-
-    
 
 // ---------- Statements ----------
 
@@ -44,7 +43,8 @@ public:
     std::string elemType;  // element type when type == "List"
     std::string name;
     int arraySize = -1;    // >=0 for "char c[20]"
-    ExprPtr init;          // may be null (no initializer)
+    ExprPtr init;          // never null -- every declaration requires an initializer (memory safety)
+    bool isNull = false;   // always false; kept for structural compatibility
 };
 
 struct MemberExpr : Expr
@@ -61,17 +61,25 @@ struct MethodCallExpr : Expr
 };
 
 class AssignStmt : public Stmt { public: std::string name; ExprPtr value; };
-class ReturnStmt  : public Stmt { public: ExprPtr value; }; // value may be null
-class ExprStmt    : public Stmt { public: ExprPtr expr; };
+class ReturnStmt : public Stmt { public: ExprPtr value; }; // value may be null
+class ExprStmt : public Stmt { public: ExprPtr expr; };
 
 class PrintCode : public Stmt { public: bool newline = false; ExprPtr value; int toRight = 1; };
 
-class InputCode : public Stmt { public: ExprPtr prompt; std::string varName; };
-class InputString : public Stmt { public: ExprPtr prompt; std::string varName; std::string limit; };
+class ReadCode : public Stmt { public: ExprPtr prompt; std::string varName; };
+class ReadLine : public Stmt { public: ExprPtr prompt; std::string varName; std::string limit; };
 
 class BreakStmt : public Stmt {};
 class ContinueStmt : public Stmt {};
 class ClearStmt : public Stmt {};
+
+class CFDecl : public Stmt {
+public:
+    std::string name;
+    std::vector<Param> params;
+    std::string returnType;
+    std::vector<StmtPtr> body;
+};
 
 class IfStmt : public Stmt {
 public:
@@ -102,11 +110,9 @@ public:
     ExprPtr from;
     ExprPtr to;
     std::vector<StmtPtr> body;
-}; 
+};
 
 // ---------- Top level ----------
-
-class Param { public: std::string type; std::string name; };
 
 class FunctionDecl {
 public:
@@ -116,12 +122,41 @@ public:
     std::vector<StmtPtr> body;
 };
 
+class CFuncDecl : public Stmt {
+public:
+    std::string name;
+    std::vector<Param> params;
+    std::string returnType;
+    std::vector<StmtPtr> body;
+};
+
+class ClassDecl {
+public:
+    std::string name;
+    std::vector<StmtPtr> publicBody;
+    std::vector<StmtPtr> privateBody;
+    bool pub = false;
+    bool pvr = false;
+};
+
+class StructCode {
+public:
+    std::string name;
+    std::vector<StmtPtr> body;
+};
+
+class ClsPublic { public: std::vector<StmtPtr> body; };
+class ClsPrivate { public: std::vector<StmtPtr> body; };
+
 class LibImport { public: std::string libName; };
 
 class Program {
 public:
     std::vector<LibImport> imports;
+    std::vector<CFuncDecl> cfunctions;
     std::vector<FunctionDecl> functions;
+    std::vector<ClassDecl> classes;
+    std::vector<StructCode> struc;
     std::unordered_set<std::string> usedObjects;
 };
 
