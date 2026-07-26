@@ -8,24 +8,26 @@ enum class TokenType {
     // literals / names
     Identifier, Number, String, Char,
     // keywords
-    Fn, Ret, 
-    If, Elif, Else, 
-    While, For, 
-    In, 
-    Import, 
-    List, 
-    Print, PrintLine, Input, InputString,
+    Class, Public, Private,
+    Struct,
+    Fn, Ret,
+    If, Elif, Else,
+    While, For,
+    In,
+    Import,
+    List,
+    Print, PrintLine, Read, ReadLine,
     Continue, Break,
     Clear,
     // built-in types
-    TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte, TypeChar, TypeBool, TypeVoid,
+    TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte, TypeChar, TypeBool, TypeVoid, TypeAuto,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
-    Comma, Semicolon, Colon, DoubleColon, At, Dot,
+    Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,
     // operators
     Assign, Eq, Neq, Lt, Gt, Le, Ge, AndAnd, OrOr,
-    Plus, Minus, Star, Slash, Shl, Shr, 
-    PlusPlus, MinusMinus, 
+    Plus, Minus, Star, Slash, Shl, Shr,
+    PlusPlus, MinusMinus,
     AssignAdd, AssignMinus, AssignMulti, AssignSlash,
     // unrecognized character
     Invalid,
@@ -36,6 +38,7 @@ struct Token {
     TokenType type;
     std::string text;
     int line;
+    size_t pos = 0; // byte offset of this token's first character in the source
 };
 
 std::vector<Token> tokenize(const std::string& source);
