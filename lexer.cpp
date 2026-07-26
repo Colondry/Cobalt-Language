@@ -4,25 +4,28 @@
 
 static const std::unordered_map<std::string, TokenType> keywords = {
     // Syntax
-    {"fn", TokenType::Fn}, {"ret", TokenType::Ret}, 
+    {"fn", TokenType::Fn}, {"ret", TokenType::Ret},
+    {"class", TokenType::Class}, {"public", TokenType::Public}, {"private", TokenType::Private},
+    {"struct", TokenType::Struct},
     {"if", TokenType::If}, {"elif", TokenType::Elif}, {"else", TokenType::Else},
     {"while", TokenType::While}, {"for", TokenType::For}, {"in", TokenType::In},
     {"import", TokenType::Import},
     {"print", TokenType::Print}, {"println", TokenType::PrintLine},
-    {"input", TokenType::Input}, {"inputstr", TokenType::InputString},
+    {"read", TokenType::Read}, {"readln", TokenType::ReadLine},
     {"continue", TokenType::Continue}, {"break", TokenType::Break},
     {"clear", TokenType::Clear},
-    
+
     // Data Types
-    {"List", TokenType::List}, 
-    {"int", TokenType::TypeInt}, 
+    {"List", TokenType::List},
+    {"int", TokenType::TypeInt},
     {"string", TokenType::TypeString},
-    {"float", TokenType::TypeFloat}, 
+    {"float", TokenType::TypeFloat},
     {"double", TokenType::TypeDouble},
-    {"byte", TokenType::TypeByte}, 
+    {"byte", TokenType::TypeByte},
     {"char", TokenType::TypeChar},
     {"bool", TokenType::TypeBool},
     {"void", TokenType::TypeVoid},
+    {"auto", TokenType::TypeAuto},
 };
 
 std::vector<Token> tokenize(const std::string& src) {
@@ -30,16 +33,19 @@ std::vector<Token> tokenize(const std::string& src) {
     size_t i = 0;
     int line = 1;
     size_t n = src.size();
+    size_t tokenStart = 0; // byte offset where the token currently being scanned began
 
     auto push = [&](TokenType t, const std::string& text) {
-        tokens.push_back({ t, text, line });
-    };
+        tokens.push_back({ t, text, line, tokenStart });
+        };
 
     while (i < n) {
         char c = src[i];
 
         if (c == '\n') { line++; i++; continue; }
         if (std::isspace(static_cast<unsigned char>(c))) { i++; continue; }
+
+        tokenStart = i; // every push() below belongs to the token starting here
 
         // string literal
         if (c == '"') {
@@ -122,35 +128,37 @@ std::vector<Token> tokenize(const std::string& src) {
             if (two == "-=") { push(TokenType::AssignMinus, two); i += 2; continue; }
             if (two == "*=") { push(TokenType::AssignMulti, two); i += 2; continue; }
             if (two == "/=") { push(TokenType::AssignSlash, two); i += 2; continue; }
+            if (two == "};") { push(TokenType::SClose, two); i += 2; continue; }
         }
 
         // single-character tokens
         switch (c) {
-            case '(': push(TokenType::LParen, "("); break;
-            case ')': push(TokenType::RParen, ")"); break;
-            case '{': push(TokenType::LBrace, "{"); break;
-            case '}': push(TokenType::RBrace, "}"); break;
-            case '[': push(TokenType::LBracket, "["); break;
-            case ']': push(TokenType::RBracket, "]"); break;
-            case ',': push(TokenType::Comma, ","); break;
-            case ';': push(TokenType::Semicolon, ";"); break;
-            case ':': push(TokenType::Colon, ":"); break;
-            case '@': push(TokenType::At, "@"); break;
-            case '=': push(TokenType::Assign, "="); break;
-            case '<': push(TokenType::Lt, "<"); break;
-            case '>': push(TokenType::Gt, ">"); break;
-            case '+': push(TokenType::Plus, "+"); break;
-            case '-': push(TokenType::Minus, "-"); break;
-            case '*': push(TokenType::Star, "*"); break;
-            case '/': push(TokenType::Slash, "/"); break;
-            case '.': push(TokenType::Dot, "."); break;
-            default:
-                push(TokenType::Invalid, std::string(1, c));
-                break;
+        case '(': push(TokenType::LParen, "("); break;
+        case ')': push(TokenType::RParen, ")"); break;
+        case '{': push(TokenType::LBrace, "{"); break;
+        case '}': push(TokenType::RBrace, "}"); break;
+        case '[': push(TokenType::LBracket, "["); break;
+        case ']': push(TokenType::RBracket, "]"); break;
+        case ',': push(TokenType::Comma, ","); break;
+        case ';': push(TokenType::Semicolon, ";"); break;
+        case ':': push(TokenType::Colon, ":"); break;
+        case '@': push(TokenType::At, "@"); break;
+        case '=': push(TokenType::Assign, "="); break;
+        case '<': push(TokenType::Lt, "<"); break;
+        case '>': push(TokenType::Gt, ">"); break;
+        case '+': push(TokenType::Plus, "+"); break;
+        case '-': push(TokenType::Minus, "-"); break;
+        case '*': push(TokenType::Star, "*"); break;
+        case '/': push(TokenType::Slash, "/"); break;
+        case '.': push(TokenType::Dot, "."); break;
+        default:
+            push(TokenType::Invalid, std::string(1, c));
+            break;
         }
         i++;
     }
 
+    tokenStart = n;
     push(TokenType::EndOfFile, "");
     return tokens;
 }
