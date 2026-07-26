@@ -4,6 +4,8 @@
 #include <iostream>
 #include <filesystem>
 #include <set>
+#include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -22,15 +24,14 @@ void stripComment(std::string& line) {
     for (size_t i = 0; i < line.size(); i++) {
         if (line[i] == '"') {
             inString = !inString;
-        } else if (!inString && line[i] == '#') {
+        }
+        else if (!inString && line[i] == '#') {
             line.erase(i);
             return;
         }
     }
 }
 
-// Returns the quoted filename in a `@import "file.cb"` line, or "" if the
-// line (after comment-stripping) isn't that form.
 static std::string importedFileName(const std::string& line) {
     size_t atPos = line.find('@');
     if (atPos == std::string::npos) return "";
@@ -66,7 +67,8 @@ static std::string preprocessRecursive(const std::string& path, std::set<std::st
 
         if (!importedFile.empty()) {
             result << preprocessRecursive(importedFile, visited);
-        } else {
+        }
+        else {
             stripComment(line);
             result << line << "\n";
         }
@@ -74,12 +76,6 @@ static std::string preprocessRecursive(const std::string& path, std::set<std::st
     return result.str();
 }
 
-// Searches for a file by name. On Windows this scans every drive letter
-// (slow -- only use it when you genuinely don't know where a file is).
-// On other platforms it only looks in the current directory, since that's
-// the only case this project currently needs. Prefer just using a known
-// relative path directly when you have one (see main.cpp's interpret(),
-// which used to call this on the .cpp it had just written itself).
 std::string findFile(const std::string& filename)
 {
 #ifdef _WIN32
@@ -97,9 +93,9 @@ std::string findFile(const std::string& filename)
         try
         {
             for (const auto& entry :
-                 fs::recursive_directory_iterator(
-                     root,
-                     fs::directory_options::skip_permission_denied))
+                fs::recursive_directory_iterator(
+                    root,
+                    fs::directory_options::skip_permission_denied))
             {
                 if (!entry.is_regular_file())
                     continue;
@@ -124,4 +120,101 @@ std::string findFile(const std::string& filename)
 std::string preprocessFile(const std::string& sourcePath) {
     std::set<std::string> visited;
     return preprocessRecursive(sourcePath, visited);
+}
+
+static std::string g_exePath;
+
+std::string findLibraryDir(const std::string& name, const std::string& inputFileDir) {
+    std::vector<fs::path> candidates;
+
+    std::string exeDir = getExeDir();
+    if (!exeDir.empty()) {
+        candidates.push_back(fs::path(exeDir) / "lib" / name);
+    }
+    if (!inputFileDir.empty()) {
+        candidates.push_back(fs::path(inputFileDir) / name);
+    }
+
+    for (const fs::path& candidate : candidates) {
+        std::error_code ec;
+        if (fs::exists(candidate, ec) && !ec && fs::is_directory(candidate, ec) && !ec) {
+            fs::path abs = fs::absolute(candidate, ec);
+            return ec ? candidate.string() : abs.string();
+        }
+    }
+    return "";
+}
+
+std::vector<std::string> listCppFilesIn(const std::string& dir) {
+    std::vector<std::string> result;
+    if (dir.empty()) return result;
+
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec) || ec) return result;
+
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".cpp") continue;
+
+        std::error_code absEc;
+        fs::path abs = fs::absolute(entry.path(), absEc);
+        result.push_back(absEc ? entry.path().string() : abs.string());
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+std::string findLibraryLinkFlags(const std::string& bundleDir) {
+    if (bundleDir.empty()) return "";
+    fs::path linkFile = fs::path(bundleDir) / "link.txt";
+
+    std::error_code ec;
+    if (!fs::exists(linkFile, ec) || ec) return "";
+
+    std::ifstream in(linkFile);
+    if (!in) return "";
+    std::ostringstream contents;
+    contents << in.rdbuf();
+
+    std::string flags = contents.str();
+    // Trim leading/trailing whitespace (including trailing newline).
+    size_t start = flags.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) return "";
+    size_t end = flags.find_last_not_of(" \t\r\n");
+    return flags.substr(start, end - start + 1);
+}
+
+void setExecutablePath(const std::string& argv0) {
+    g_exePath = argv0;
+}
+
+std::string getExeDir() {
+    if (g_exePath.empty()) return "";
+    std::error_code ec;
+    fs::path resolved = fs::absolute(g_exePath, ec);
+    if (ec) return "";
+    return resolved.parent_path().string();
+}
+
+std::string findLibraryFile(const std::string& name, const std::string& extension, const std::string& inputFileDir) {
+    std::vector<fs::path> candidates;
+
+    std::string exeDir = getExeDir();
+    if (!exeDir.empty()) {
+        candidates.push_back(fs::path(exeDir) / "lib" / (name + extension));
+    }
+    if (!inputFileDir.empty()) {
+        candidates.push_back(fs::path(inputFileDir) / (name + extension));
+    }
+    candidates.push_back(fs::path(name + extension)); // current working directory
+
+    for (const fs::path& candidate : candidates) {
+        std::error_code ec2;
+        if (fs::exists(candidate, ec2) && !ec2) {
+            fs::path abs = fs::absolute(candidate, ec2);
+            return ec2 ? candidate.string() : abs.string();
+        }
+    }
+    return "";
 }
