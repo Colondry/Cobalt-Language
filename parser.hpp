@@ -13,18 +13,19 @@ class Parser
 public:
     Program program;
     Parser() = default;
-    explicit Parser(std::vector<Token> tokens);
+    explicit Parser(std::vector<Token> tokens, std::string source = "");
 
     // Entry point: parses the whole token stream into a Program.
     Program parse();
 
     std::vector<std::string> errors;
-    
+
 
 private:
-    
+
     std::vector<Token> tokens;
-    
+    std::string source;
+
     size_t current = 0;
 
     // ---------- Core cursor / matching infra (defined in parser.cpp) ----------
@@ -38,12 +39,12 @@ private:
 
     // ---------- Types (defined in baseutils.cpp) ----------
     bool isTypeToken(TokenType t) const;
-    std::string typeName(TokenType t); 
-    std::string expectType();          
+    std::string typeName(TokenType t);
+    std::string expectType();
 
     // ---------- Expressions, lowest to highest precedence (baseutils.cpp) ---------
     ExprPtr parseBinaryLevel(const std::function<ExprPtr()>& parseNextLevel,
-                              const std::function<std::string(TokenType)>& operatorFor);
+        const std::function<std::string(TokenType)>& operatorFor);
     ExprPtr parseExpression();     // handles '<<' / '>>' string concatenation
     ExprPtr parseLogicalOr();      // ||
     ExprPtr parseLogicalAnd();     // &&
@@ -58,6 +59,10 @@ private:
 
     // ---------- Statements (baseutils.cpp) ----------
     std::vector<StmtPtr> parseBlock();
+    std::vector<StmtPtr> parseCFBlock();
+    std::vector<StmtPtr> parseSFBlock();
+    void parseSBlock(StructCode& str);
+    void parseCBlock(ClassDecl& cls);
     StmtPtr parseVarDecl();
     StmtPtr parseAssignOrExprStatement();
     StmtPtr parseReturn();
@@ -67,9 +72,11 @@ private:
     StmtPtr parseWhile();
     StmtPtr parseForRange();
     StmtPtr parseStatement();
+    StmtPtr parseSClass();
+    StmtPtr parseSStr();
     StmtPtr parsePrintCode();
-    StmtPtr parseInputCode();
-    StmtPtr parseInputStringCode();
+    StmtPtr parseReadCode();
+    StmtPtr parseReadLineCode();
     StmtPtr parseContinue();
     StmtPtr parseBreak();
     StmtPtr parseClear();
@@ -77,6 +84,11 @@ private:
     // ---------- Top level (baseutils.cpp) ----------
     void parseImport(Program& prog);
     FunctionDecl parseFunction();
+    StmtPtr parseCFunction();
+    ClassDecl parseClasses();
+    ClsPublic parsePublic();
+    ClsPrivate parsePrivate();
+    StructCode parseStruct();
 };
 
 #endif
