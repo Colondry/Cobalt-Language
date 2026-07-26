@@ -1,8 +1,12 @@
 #include "codeGen.hpp"
+#include "flib.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 static std::string cppType(const std::string& t) {
     if (t == "string") return "std::string";
@@ -21,6 +25,24 @@ static std::string emitConcatPieces(const std::shared_ptr<ConcatExpr>& c) {
         out += emitExpr(c->pieces[i]);
     }
     return out;
+}
+
+static std::string emitCFDSignature(const CFDecl& fn) {
+    std::string out = cppType(fn.returnType) + " " + fn.name + "(";
+    for (size_t i = 0; i < fn.params.size(); i++) {
+        if (i) out += ", ";
+        out += cppType(fn.params[i].type) + " " + fn.params[i].name;
+    }
+    return out += ")";
+}
+
+static std::string emitCFSignature(const CFuncDecl& fn) {
+    std::string out = cppType(fn.returnType) + " " + fn.name + "(";
+    for (size_t i = 0; i < fn.params.size(); i++) {
+        if (i) out += ", ";
+        out += cppType(fn.params[i].type) + " " + fn.params[i].name;
+    }
+    return out += ")";
 }
 
 static std::string emitExpr(const ExprPtr& e) {
@@ -84,7 +106,8 @@ static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::of
     if (value) {
         if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value)) {
             out << " << " << emitConcatPieces(c);
-        } else {
+        }
+        else {
             out << " << " << emitExpr(value);
         }
     }
@@ -101,12 +124,12 @@ static void emitBreakStmt(int depth, std::ofstream& out) {
 }
 
 static void emitClearStmt(int depth, std::ofstream& out) {
-    #ifdef _WIN32
+#ifdef _WIN32
     out << indent(depth) << "system(\"cls\");\n";
-    #else
+#else
     out << indent(depth) << "std::cout << \"\\033[2J\\033[H\";\n";
     out << indent(depth) << "std::cout.flush();\n";
-    #endif
+#endif
 }
 
 static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out);
@@ -120,13 +143,21 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << indent(depth);
         if (v->type == "List") {
             out << "std::vector<" << cppType(v->elemType) << "> " << v->name;
-        } else if (v->arraySize >= 0) {
+        }
+        else if (v->arraySize >= 0) {
             out << cppType(v->type) << " " << v->name << "[" << v->arraySize << "]";
-        } else {
+        }
+        else {
             out << cppType(v->type) << " " << v->name;
         }
         if (v->init) out << " = " << emitExpr(v->init);
         out << ";\n";
+        return;
+    }
+    if (auto f = std::dynamic_pointer_cast<CFDecl>(stmt)) {
+        out << indent(depth) << emitCFDSignature(*f) << " {\n";
+        emitBlock(f->body, depth + 1, out);
+        out << indent(depth) << "}\n";
         return;
     }
     if (auto a = std::dynamic_pointer_cast<AssignStmt>(stmt)) {
@@ -141,20 +172,20 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         emitPrintStmt(p->value, p->newline, depth, out);
         return;
     }
-    if (auto in = std::dynamic_pointer_cast<InputCode>(stmt)) {
+    if (auto in = std::dynamic_pointer_cast<ReadCode>(stmt)) {
         if (in->prompt) {
             out << indent(depth) << "std::cout << " << emitExpr(in->prompt) << ";\n";
         }
         out << indent(depth) << "std::cin >> " << in->varName << ";\n";
         return;
     }
-    if (auto inStr = std::dynamic_pointer_cast<InputString>(stmt)) {
+    if (auto inStr = std::dynamic_pointer_cast<ReadLine>(stmt)) {
         if (inStr->prompt) {
             out << indent(depth) << "std::cout << " << emitExpr(inStr->prompt) << ";\n";
         }
         out << indent(depth) << "std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\\n');\n";
         out << indent(depth) << "std::getline(std::cin, " << inStr->varName << ", " << (inStr->limit.empty() ? "std::numeric_limits<std::streamsize>::max()" :
-                                                                                                                "" + inStr->limit + "") << ");\n";
+            "" + inStr->limit + "") << ");\n";
         return;
     }
     if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmt)) {
@@ -187,7 +218,7 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(stmt)) {
         out << indent(depth) << "for (int " << f->varName << " = " << emitExpr(f->from) << "; " <<
-               f->varName << " <= " << emitExpr(f->to) << "; " << f->varName << "++) {\n";
+            f->varName << " <= " << emitExpr(f->to) << "; " << f->varName << "++) {\n";
         emitBlock(f->body, depth + 1, out);
         out << indent(depth) << "}\n";
         return;
@@ -235,7 +266,7 @@ static std::string emitSignature(const FunctionDecl& fn) {
     return out += ")";
 }
 
-void codeGen(Program& program, std::string fileName) {
+void codeGen(Program& program, std::string fileName, const std::string& inputFileDir) {
     std::string outcpp = fileName + ".cpp";
     std::ofstream file(outcpp);
     if (!file) {
@@ -250,23 +281,84 @@ void codeGen(Program& program, std::string fileName) {
     file << "#include <limits>\n";
 
     for (const LibImport& imp : program.imports) {
-        file << "#include \"" << imp.libName << ".hpp\"\n";
+        std::string headerPath;
+
+        std::string bundleDir = findLibraryDir(imp.libName, inputFileDir);
+        if (!bundleDir.empty()) {
+            fs::path hpp = fs::path(bundleDir) / (imp.libName + ".hpp");
+            fs::path h = fs::path(bundleDir) / (imp.libName + ".h");
+            std::error_code ec;
+            if (fs::exists(hpp, ec) && !ec) headerPath = hpp.string();
+            else if (fs::exists(h, ec) && !ec) headerPath = h.string();
+        }
+        if (headerPath.empty()) {
+            headerPath = findLibraryFile(imp.libName, ".hpp", inputFileDir);
+        }
+
+        if (headerPath.empty()) {
+            // Not found anywhere -- fall back to the old behavior and
+            // let the C++ compiler report a clear "file not found".
+            file << "#include \"" << imp.libName << ".hpp\"\n";
+        }
+        else {
+            file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
+        }
     }
+    file << "\n";
+
+    for (const ClassDecl& cls : program.classes) {
+        file << "class " << "__" << cls.name << "__ {\n";
+        if (cls.pub) {
+            file << "public:\n";
+            emitBlock(cls.publicBody, 1, file);
+        }
+        if (cls.pvr) {
+            file << "private:\n";
+            emitBlock(cls.privateBody, 1, file);
+        }
+        file << "};\n";
+    }
+
+    for (const StructCode& str : program.struc) {
+        file << "struct __" << str.name << "__ {\n";
+        emitBlock(str.body, 1, file);
+        file << "};\n";
+    }
+
+    for (const StructCode& str : program.struc) {
+        file << "__" << str.name << "__ " << str.name << ";\n";
+    }
+
+    for (const ClassDecl& cls : program.classes) {
+        file << "__" << cls.name << "__ " << cls.name << ";\n";
+    }
+
     file << "\n";
 
     for (const FunctionDecl& fn : program.functions) {
         file << emitSignature(fn) << ";\n";
     }
     file << "\n";
-    std::cout << "used objects:\n";
-    for(auto& obj : program.usedObjects)
+    for (auto& obj : program.usedObjects)
     {
-        file << "__" << obj << "__ " << obj << ";\n";
+        bool alreadyDeclared = false;
+        for (const ClassDecl& cls : program.classes) {
+            if (cls.name == obj) { alreadyDeclared = true; break; }
+        }
+        if (!alreadyDeclared) {
+            file << "__" << obj << "__ " << obj << ";\n";
+        }
+    }
+
+    for (const CFuncDecl& cfnd : program.cfunctions) {
+        file << emitCFSignature(cfnd) << " {\n";
+        emitBlock(cfnd.body, 1, file);
+        file << "}\n\n";
     }
 
     for (const FunctionDecl& fn : program.functions) {
         file << emitSignature(fn) << " {\n";
-        emitBlock(fn.body, 1, file); 
+        emitBlock(fn.body, 1, file);
         file << "}\n\n";
     }
 }
