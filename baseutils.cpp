@@ -9,28 +9,29 @@
 
 bool Parser::isTypeToken(TokenType t) const {
     return t == TokenType::TypeInt || t == TokenType::TypeString || t == TokenType::TypeFloat ||
-           t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
-           t == TokenType::TypeBool || t == TokenType::TypeVoid;
+        t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
+        t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto;
 }
 
 std::string Parser::typeName(TokenType t) {
     switch (t) {
-        case TokenType::TypeInt: return "int";
-        case TokenType::TypeString: return "string";
-        case TokenType::TypeFloat: return "float";
-        case TokenType::TypeDouble: return "double";
-        case TokenType::TypeByte: return "byte";
-        case TokenType::TypeChar: return "char";
-        case TokenType::TypeBool: return "bool";
-        case TokenType::TypeVoid: return "void";
-        default: return "string";
+    case TokenType::TypeInt: return "int";
+    case TokenType::TypeString: return "string";
+    case TokenType::TypeFloat: return "float";
+    case TokenType::TypeDouble: return "double";
+    case TokenType::TypeByte: return "byte";
+    case TokenType::TypeChar: return "char";
+    case TokenType::TypeBool: return "bool";
+    case TokenType::TypeVoid: return "void";
+    case TokenType::TypeAuto: return "auto";
+    default: return "auto";
     }
 }
 
 std::string Parser::expectType() {
     if (!isTypeToken(peek().type)) {
         reportError("expected a data type (int, string, float, double, byte, char, bool, void) but got '" +
-                     peek().text + "'");
+            peek().text + "'");
         advance();
         return "int";
     }
@@ -41,7 +42,7 @@ std::string Parser::expectType() {
 
 // Helper for parsing binary expressions with a given precedence level.
 ExprPtr Parser::parseBinaryLevel(const std::function<ExprPtr()>& parseNextLevel,
-                                  const std::function<std::string(TokenType)>& operatorFor) {
+    const std::function<std::string(TokenType)>& operatorFor) {
     ExprPtr left = parseNextLevel();
     while (true) {
         std::string op = operatorFor(peek().type);
@@ -104,11 +105,11 @@ ExprPtr Parser::parseComparison() {
         [this] { return parseAdditive(); },
         [](TokenType t) -> std::string {
             switch (t) {
-                case TokenType::Lt: return "<";
-                case TokenType::Gt: return ">";
-                case TokenType::Le: return "<=";
-                case TokenType::Ge: return ">=";
-                default: return "";
+            case TokenType::Lt: return "<";
+            case TokenType::Gt: return ">";
+            case TokenType::Le: return "<=";
+            case TokenType::Ge: return ">=";
+            default: return "";
             }
         });
 }
@@ -179,38 +180,53 @@ ExprPtr Parser::parsePostfix() {
             idx->index = parseExpression();
             expect(TokenType::RBracket, "]");
             expr = idx;
-        } else if (check(TokenType::PlusPlus)) { // ++
+        }
+        else if (check(TokenType::PlusPlus)) { // ++
             if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
                 advance();
                 auto inc = std::make_shared<PostIncExpr>();
                 inc->name = name->name;
                 expr = inc;
-            } else {
+            }
+            else {
                 reportError("'++' can only be applied to a variable name");
                 advance(); // consume the '++' so we don't loop forever
                 break;
             }
-        } else if(match(TokenType::Dot)) {
+        }
+        else if (check(TokenType::MinusMinus)) { // ++
+            if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
+                advance();
+                auto inc = std::make_shared<PostIncExpr>();
+                inc->name = name->name;
+                expr = inc;
+            }
+            else {
+                reportError("'--' can only be applied to a variable name");
+                advance(); // consume the '++' so we don't loop forever
+                break;
+            }
+        }
+        else if (match(TokenType::Dot)) {
             Token member =
                 expect(TokenType::Identifier, "member name after '.'");
 
-            if(match(TokenType::LParen))
+            if (match(TokenType::LParen))
             {
                 auto call =
                     std::make_shared<MethodCallExpr>();
 
                 call->object = expr; // the object on which the method is called
                 call->method = member.text; // the method name
-                
-                if(auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
+
+                if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
                     program.usedObjects.insert(name->name);
                 }
 
-                if(!check(TokenType::RParen)) {
+                if (!check(TokenType::RParen)) {
                     do {
                         call->args.push_back(parseExpression());
-                    }
-                    while(match(TokenType::Comma));
+                    } while (match(TokenType::Comma));
                 }
                 expect(TokenType::RParen, ")");
                 expr = call;
@@ -224,7 +240,8 @@ ExprPtr Parser::parsePostfix() {
 
                 expr = m;
             }
-        }else {
+        }
+        else {
             break;
         }
     }
@@ -314,14 +331,21 @@ StmtPtr Parser::parseVarDecl() {
             expect(TokenType::LBracket, "[");
             auto lit = std::make_shared<ListLit>();
             if (!check(TokenType::RBracket)) {
-                lit->items.push_back(parseExpression());
-                while (match(TokenType::Comma)) lit->items.push_back(parseExpression());
+                lit->items.push_back(parseExpression()); lit->index++;
+                while (match(TokenType::Comma))
+                {
+                    lit->items.push_back(parseExpression());
+                    lit->index++;
+                }
             }
             expect(TokenType::RBracket, "]");
             decl->init = lit;
         }
         expect(TokenType::Semicolon, ";");
         return decl;
+    }
+    else if (check(TokenType::TypeVoid)) {
+        reportError("variable type cannot be void.");
     }
     auto decl = std::make_shared<VarDecl>();
     decl->type = expectType();
@@ -335,8 +359,15 @@ StmtPtr Parser::parseVarDecl() {
     }
     if (match(TokenType::Assign)) {
         decl->init = parseExpression();
+        expect(TokenType::Semicolon, ";");
     }
-    expect(TokenType::Semicolon, ";");
+    else if (check(TokenType::Semicolon)) {
+        reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
+        advance(); // consume the ';' so parsing can continue past this statement
+    }
+    else {
+        expect(TokenType::Semicolon, ";"); // some other unexpected token -- report it and try to recover
+    }
     return decl;
 }
 
@@ -439,11 +470,11 @@ StmtPtr Parser::parsePrintCode() {
     return stmt;
 }
 
-StmtPtr Parser::parseInputCode() {
-    advance(); // 'input'
+StmtPtr Parser::parseReadCode() {
+    advance(); // 'read'
     expect(TokenType::LParen, "(");
 
-    auto stmt = std::make_shared<InputCode>();
+    auto stmt = std::make_shared<ReadCode>();
 
     ExprPtr firstOperand = parseLogicalOr();
 
@@ -453,10 +484,12 @@ StmtPtr Parser::parseInputCode() {
         stmt->prompt = firstOperand;
         Token nameTok = expect(TokenType::Identifier, "variable name after '>>'");
         stmt->varName = nameTok.text;
-    } else if (auto name = std::dynamic_pointer_cast<NameExpr>(firstOperand)) {
+    }
+    else if (auto name = std::dynamic_pointer_cast<NameExpr>(firstOperand)) {
         // input(var
         stmt->varName = name->name;
-    } else {
+    }
+    else {
         reportError("expected a variable name inside input(...), like input(x) or input(\"prompt\" >> x)");
     }
 
@@ -465,11 +498,11 @@ StmtPtr Parser::parseInputCode() {
     return stmt;
 }
 
-StmtPtr Parser::parseInputStringCode() {
-    advance(); // 'inputstr'
+StmtPtr Parser::parseReadLineCode() {
+    advance(); // 'readln'
     expect(TokenType::LParen, "(");
 
-    auto stmt = std::make_shared<InputString>();
+    auto stmt = std::make_shared<ReadLine>();
 
     ExprPtr firstOperand = parseLogicalOr();
 
@@ -479,10 +512,12 @@ StmtPtr Parser::parseInputStringCode() {
         stmt->prompt = firstOperand; // any expression is fine as a prompt, not just string literals
         Token nameTok = expect(TokenType::Identifier, "variable name after '>>'");
         stmt->varName = nameTok.text;
-    } else if (auto name = std::dynamic_pointer_cast<NameExpr>(firstOperand)) {
+    }
+    else if (auto name = std::dynamic_pointer_cast<NameExpr>(firstOperand)) {
         // inputstr(var
         stmt->varName = name->name;
-    } else {
+    }
+    else {
         reportError("expected a variable name inside inputstr(...), like inputstr(x) or inputstr(\"prompt\" >> x)");
     }
 
@@ -494,10 +529,12 @@ StmtPtr Parser::parseInputStringCode() {
         ExprPtr limitExpr = parseExpression();
         if (auto limitLit = std::dynamic_pointer_cast<CharLit>(limitExpr)) {
             stmt->limit = limitLit->value;
-        } else {
+        }
+        else {
             reportError("expected a char literal for the limit in inputstr(..., limit)");
-        } 
-    } else {
+        }
+    }
+    else {
         stmt->limit = ""; // no limit specified
     }
 
@@ -528,6 +565,64 @@ StmtPtr Parser::parseClear() {
     return stmt;
 }
 
+std::vector<StmtPtr> Parser::parseCFBlock() {
+    expect(TokenType::LBrace, "{");
+    std::vector<StmtPtr> stmts;
+    while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
+        StmtPtr s = parseStatement();
+        if (s) stmts.push_back(s);
+    }
+    if (check(TokenType::SClose)) {
+        advance(); // "};"
+    }
+    else {
+        expect(TokenType::RBrace, "}");
+        expect(TokenType::Semicolon, ";");
+    }
+    return stmts;
+}
+std::vector<StmtPtr> Parser::parseSFBlock() {
+    expect(TokenType::LBrace, "{");
+    std::vector<StmtPtr> stmts;
+    while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
+        StmtPtr s = parseSStr();
+        if (s) stmts.push_back(s);
+    }
+    if (check(TokenType::SClose)) {
+        advance(); // "};"
+    }
+    else {
+        expect(TokenType::RBrace, "}");
+        expect(TokenType::Semicolon, ";");
+    }
+    return stmts;
+}
+
+StmtPtr Parser::parseCFunction() {
+    advance(); // 'fn'
+    Token nameTok = expect(TokenType::Identifier, "function name");
+    expect(TokenType::LParen, "(");
+
+    CFuncDecl fn;
+    auto fnd = std::make_shared<CFDecl>();
+    fn.name = nameTok.text; fnd->name = nameTok.text;
+    if (!check(TokenType::RParen)) {
+        do {
+            Param p;
+            p.type = expectType();
+            p.name = expect(TokenType::Identifier, "parameter name").text;
+            fn.params.push_back(p); fnd->params.push_back(p);
+        } while (match(TokenType::Comma));
+    }
+    expect(TokenType::RParen, ")");
+    expect(TokenType::Colon, ":");
+    fn.returnType = expectType(); fnd->returnType = fn.returnType;
+    fnd->body = parseCFBlock();
+    fn.body = fnd->body;
+
+    return fnd;
+}
+
 StmtPtr Parser::parseStatement() {
     if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
     if (check(TokenType::Ret)) return parseReturn();
@@ -537,17 +632,104 @@ StmtPtr Parser::parseStatement() {
     if (check(TokenType::While)) return parseWhile();
     if (check(TokenType::For)) return parseForRange();
     if (check(TokenType::Print) || check(TokenType::PrintLine)) return parsePrintCode();
-    if (check(TokenType::Input)) return parseInputCode();
+    if (check(TokenType::Read)) return parseReadCode();
     if (check(TokenType::Continue)) return parseContinue();
     if (check(TokenType::Break)) return parseBreak();
     if (check(TokenType::Clear)) return parseClear();
-    if (check(TokenType::InputString)) return parseInputStringCode();
+    if (check(TokenType::ReadLine)) return parseReadLineCode();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
 
     reportError("unexpected token '" + peek().text + "'");
     recoverStatement();
     return nullptr;
 }
+
+StmtPtr Parser::parseSStr() {
+    if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
+    if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
+
+    reportError("unexpected token '" + peek().text + "'");
+    recoverStatement();
+    return nullptr;
+}
+
+StmtPtr Parser::parseSClass() {
+    if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
+    if (check(TokenType::Fn)) return parseCFunction();
+    if (check(TokenType::Ret)) return parseReturn();
+    if (check(TokenType::If)) return parseIf();
+    if (check(TokenType::Elif)) return parseElif();
+    if (check(TokenType::Else)) return parseElse();
+    if (check(TokenType::While)) return parseWhile();
+    if (check(TokenType::For)) return parseForRange();
+    if (check(TokenType::Print) || check(TokenType::PrintLine)) return parsePrintCode();
+    if (check(TokenType::Read)) return parseReadCode();
+    if (check(TokenType::Continue)) return parseContinue();
+    if (check(TokenType::Break)) return parseBreak();
+    if (check(TokenType::Clear)) return parseClear();
+    if (check(TokenType::ReadLine)) return parseReadLineCode();
+    if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
+
+    reportError("unexpected token '" + peek().text + "'");
+    recoverStatement();
+    return nullptr;
+}
+
+void Parser::parseCBlock(ClassDecl& cls) {
+    expect(TokenType::LBrace, "{");
+    while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
+        if (check(TokenType::Public)) // public {}
+        {
+            cls.pub = true;
+            advance(); // public
+            expect(TokenType::LBrace, "{");
+            while (!check(TokenType::RBrace) && !check(TokenType::EndOfFile)) {
+                StmtPtr s = parseSClass();
+                if (s) cls.publicBody.push_back(s);
+            }
+            expect(TokenType::RBrace, "}");
+        }
+        else if (check(TokenType::Private)) // private {}
+        {
+            cls.pvr = true;
+            advance(); // private
+            expect(TokenType::LBrace, "{");
+            while (!check(TokenType::RBrace) && !check(TokenType::EndOfFile)) {
+                StmtPtr s = parseSClass();
+                if (s) cls.privateBody.push_back(s);
+            }
+            expect(TokenType::RBrace, "}");
+        }
+        else {
+            reportError("expected 'public' or 'private' block inside class '" + cls.name + "' but got '" + peek().text + "'");
+            recoverStatement();
+            break;
+        }
+    }
+    if (check(TokenType::SClose)) {
+        advance(); // "};"
+    }
+    else {
+        expect(TokenType::RBrace, "}");
+        expect(TokenType::Semicolon, ";");
+    }
+}
+
+void Parser::parseSBlock(StructCode& str) {
+    expect(TokenType::LBrace, "{");
+    while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
+        StmtPtr s = parseSClass();
+        if (s) str.body.push_back(s);
+    }
+    if (check(TokenType::SClose)) {
+        advance(); // "};"
+    }
+    else {
+        expect(TokenType::RBrace, "}");
+        expect(TokenType::Semicolon, ";");
+    }
+}
+
 
 // ---------- Top level ----------
 
@@ -576,8 +758,40 @@ FunctionDecl Parser::parseFunction() {
         } while (match(TokenType::Comma));
     }
     expect(TokenType::RParen, ")");
-    expect(TokenType::Colon, ":");
-    fn.returnType = expectType();
+    if (check(TokenType::Colon)) {
+        advance();
+        fn.returnType = expectType();
+    }
+    else {
+        if (fn.name == "main") {
+            fn.returnType = "int";
+        }
+        else {
+            fn.returnType = "auto";
+        }
+    }
     fn.body = parseBlock();
     return fn;
+}
+
+ClassDecl Parser::parseClasses() {
+    advance(); // class
+    Token nameCls = expect(TokenType::Identifier, "class name");
+
+    ClassDecl cls;
+    cls.name = nameCls.text;
+    parseCBlock(cls);
+
+    return cls;
+}
+
+StructCode Parser::parseStruct() {
+    advance(); // struct
+    Token nameStr = expect(TokenType::Identifier, "struct name");
+
+    StructCode str;
+    str.name = nameStr.text;
+    parseSBlock(str);
+
+    return str;
 }
