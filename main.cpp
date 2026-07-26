@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdio>
 #include <filesystem>
+#include <set>
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "flib.hpp"
@@ -47,12 +48,12 @@ Program parseAndGenerate(const std::string& inputFile, const std::string& output
 
     std::vector<Token> tokens = tokenize(source);
 
-    Parser parser(tokens);
+    Parser parser(tokens, source);
     Program program = parser.parse(); // exits with the full error list
 
     if (isDebug) {
         std::cout << "Parsed " << program.imports.size() << " import(s) and "
-                  << program.functions.size() << " function(s):\n";
+            << program.functions.size() << " function(s):\n";
         for (const LibImport& imp : program.imports) {
             std::cout << "  import <" << imp.libName << ">\n";
         }
@@ -62,18 +63,54 @@ Program parseAndGenerate(const std::string& inputFile, const std::string& output
         std::cout << "\n\nOutput:\n";
     }
 
-    codeGen(program, outputFile);
+    codeGen(program, outputFile, fs::path(inputFile).parent_path().string());
     return program;
 }
 
 bool invokeCppCompiler(const Program& program, const std::string& inputFile, const std::string& outputFile, const std::string& optimize, const std::string& extraFlags) {
     std::string outcpp = outputFile + ".cpp";
     fs::path exePath = resolveExePath(inputFile, outputFile);
+    std::string inputFileDir = fs::path(inputFile).parent_path().string();
 
     std::string command = "g++ -o \"" + exePath.string() + "\" " + outcpp + optimize + extraFlags;
+
+    std::set<std::string> libCpps; // dedupe: multiple imports may share a bundle dir's files
+    std::set<std::string> linkFlagsSeen; // dedupe: multiple imports may share a bundle dir's link.txt
+    std::string extraLinkFlags;
     for (const LibImport& imp : program.imports) {
-        command += " " + imp.libName + ".cpp";
+        std::string bundleDir = findLibraryDir(imp.libName, inputFileDir);
+        if (!bundleDir.empty()) {
+            // Bundle directory: 
+            for (const std::string& cpp : listCppFilesIn(bundleDir)) {
+                libCpps.insert(cpp);
+            }
+            std::string flags = findLibraryLinkFlags(bundleDir);
+            if (!flags.empty() && linkFlagsSeen.insert(bundleDir).second) {
+                extraLinkFlags += " " + flags;
+            }
+        }
+        else {
+            std::string libCpp = findLibraryFile(imp.libName, ".cpp", inputFileDir);
+            if (!libCpp.empty()) {
+                libCpps.insert(libCpp);
+            }
+            else {
+                bool headerExists = !findLibraryFile(imp.libName, ".hpp", inputFileDir).empty()
+                    || !findLibraryFile(imp.libName, ".h", inputFileDir).empty();
+                if (headerExists) {
+                    // Header-only library -- nothing to compile/link separately.
+                }
+                else {
+                    // Found neither header nor .cpp anywhere
+                    libCpps.insert(imp.libName + ".cpp");
+                }
+            }
+        }
     }
+    for (const std::string& cpp : libCpps) {
+        command += " \"" + cpp + "\"";
+    }
+    command += extraLinkFlags;
 
     int status = runSystemCommand(command);
     return status == 0;
@@ -125,6 +162,8 @@ void InterpretExperimental(const std::string& inputFile, const std::string& outp
 }
 
 int main(int argc, char* argv[]) {
+    setExecutablePath(argv[0]);
+
     std::string inputFile;
     std::string outputFile = "out"; // default name
     bool doBuild = false;
@@ -148,7 +187,8 @@ int main(int argc, char* argv[]) {
             inputFile = argv[++i];
             if (cmd == "-build") doBuild = true;
             else doRun = true;
-        } else if (cmd == "-run-experimental") {
+        }
+        else if (cmd == "-run-experimental") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: " << cmd << " requires a file argument.\n";
                 return 1;
@@ -160,28 +200,36 @@ int main(int argc, char* argv[]) {
         }
         else if (cmd == "-debug") {
             isDeb = true;
-        } else if (cmd == "-cpp") {
+        }
+        else if (cmd == "-cpp") {
             remcpp = false;
-        } else if (cmd == "-optimize-lvl-0") {
+        }
+        else if (cmd == "-optimize-lvl-0") {
             optimizeCode = " -O0 "; // no optimization
-        } else if (cmd == "-optimize-lvl-1") {
+        }
+        else if (cmd == "-optimize-lvl-1") {
             isOptimizel1 = true;
-        } else if (cmd == "-optimize-lvl-2") {
+        }
+        else if (cmd == "-optimize-lvl-2") {
             isOptimizel2 = true;
-        } else if (cmd == "-optimize-lvl-3" || cmd == "-optimize-performance") {
+        }
+        else if (cmd == "-optimize-lvl-3" || cmd == "-optimize-performance") {
             isOptimizeFast = true;
-        } else if (cmd == "-name") {
+        }
+        else if (cmd == "-name") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: -name requires an argument.\n";
                 return 1;
             }
             outputFile = argv[++i];
-        } else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Alpha v0.3";
+        }
+        else if (cmd == "--version" || cmd == "version") {
+            std::cout << "Cobalt Alpha v0.4 \"Sapphire\"";
             return 0;
-        } else if (cmd == "--help") {
+        }
+        else if (cmd == "--help") {
             std::cout <<
-R"(Cobalt Compiler
+                R"(Cobalt Compiler
 
 Usage:
     cobalt -build <input_file> -name <output_file_name>
@@ -210,58 +258,24 @@ Options:
     
         )" << "\n";
             return 0;
-        } else if (cmd == "-pipe") {
+        }
+        else if (cmd == "-pipe") {
             extraFlags += " -pipe ";
-        } else if (cmd == "-fuse-bfd ") {
+        }
+        else if (cmd == "-fuse-bfd ") {
             extraFlags += " -fuse-ld=bfd ";
-        } else if (cmd == "--changelog") {
+        }
+        else if (cmd == "--changelog") {
             std::cout <<
-R"(Cobalt Alpha v0.3 Changelog :
-
-# 🐞 Bug Fixes
-
-- Fixed various parser, compiler, and code generation issues.
-- Improved compiler stability and reliability.
-
-# New Operators
-- "+="
-- "-="
-- "-="
-- "/="
-
-# New Syntax =
-- "inputstr([prompt] >> [variable], [text_limit]);" — Reads an entire line of text into a string.
-- "continue;" — Skips to the next iteration of a loop.
-- "break;" — Exits the current loop.
-- "elif" — Else-if conditional branch.
-- "else" — Default conditional branch.
-- "clear();" — Clears the console screen.
-- Dot (".") operator for object member access and method invocation.
-  - Example:
-    "window.wnew();"
-
-# Syntax Changes =
-- Generic list syntax has been updated:
-  - Old: "List::Type"
-  - New: "List<Type>"
-
-⚙️ New Command-Line Options =
-- "-run-experimental" — Runs programs using the experimental interpreter.
-- "-changelog" — Displays the current changelog.
-- "-optimize":
-  - "-lvl0"
-  - "-lvl1"
-  - "-lvl2"
-  - "-lvl3"
-  - "-performance"
-- "-pipes"
-- "-fuse-bfd"
+                R"(Cobalt v0.4-Alpha Sapphire Changelog :
 
         )" << "\n";
             return 0;
-        } else if (cmd == "-flto") {
+        }
+        else if (cmd == "-flto") {
             extraFlags += " -flto ";
-        } else {
+        }
+        else {
             std::cerr << "Unknown argument '" << cmd << "'. See --help.\n";
             return 1;
         }
@@ -278,11 +292,14 @@ R"(Cobalt Alpha v0.3 Changelog :
 
     if (isOptimizeFast) {
         optimizeCode = " -Ofast ";
-    } else if (isOptimizel2) {
+    }
+    else if (isOptimizel2) {
         optimizeCode = " -O2 ";
-    } else if (isOptimizel1) {
+    }
+    else if (isOptimizel1) {
         optimizeCode = " -O1  ";
-    } else {
+    }
+    else {
         optimizeCode = " -O1 "; // default to no optimization
     }
     if (doRun && extraFlags != "") {
