@@ -4,6 +4,6 @@
 #include "ast.hpp"
 #include <string>
 
-void codeGen(Program& program, std::string fileName);
+void codeGen(Program& program, std::string fileName, const std::string& inputFileDir);
 
 #endif
