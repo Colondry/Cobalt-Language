@@ -1,0 +1,1 @@
+-I"lib/sdl/SDL3-devel/x86_64-w64-mingw32/include" -L"lib/sdl/SDL3-devel/x86_64-w64-mingw32/lib" -lSDL3
