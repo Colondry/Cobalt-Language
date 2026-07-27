@@ -224,7 +224,7 @@ int main(int argc, char* argv[]) {
             outputFile = argv[++i];
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Alpha v0.4 \"Sapphire\"";
+            std::cout << "Cobalt Alpha v0.4 \"Sapphire\"\n";
             return 0;
         }
         else if (cmd == "--help") {
