@@ -251,6 +251,21 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << ");\n";
         return;
     }
+    if (auto rp = std::dynamic_pointer_cast<RepeatCode>(stmt)) {
+        out << indent(depth)
+            << "for (double __value__ = 0; __value__ =< "
+            << rp->value
+            << "; __value__++) {\n";
+        emitBlock(rp->body, depth + 1, out);
+        out << indent(depth) << "}\n";
+        return;
+    }
+    if (auto fr = std::dynamic_pointer_cast<ForeverCode>(stmt)) {
+        out << indent(depth) << "while (true) {\n";
+        emitBlock(fr->body, depth + 1, out);
+        out << indent(depth) << "}\n";
+        return;
+    }
 
     std::cerr << "codeGen error: no emitter for this statement type.\n";
     std::exit(EXIT_FAILURE);

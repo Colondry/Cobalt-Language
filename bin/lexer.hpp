@@ -12,7 +12,7 @@ enum class TokenType {
     Struct,
     Fn, Ret,
     If, Elif, Else,
-    While, For,
+    While, For, Repeat, Forever,
     In,
     Import,
     List,
@@ -21,6 +21,7 @@ enum class TokenType {
     Clear,
     // built-in types
     TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte, TypeChar, TypeBool, TypeVoid, TypeAuto,
+    TypeLong,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,

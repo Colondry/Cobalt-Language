@@ -73,6 +73,17 @@ class BreakStmt : public Stmt {};
 class ContinueStmt : public Stmt {};
 class ClearStmt : public Stmt {};
 
+class RepeatCode : public Stmt {
+public:
+    ExprPtr value;
+    std::vector<StmtPtr> body;
+};
+
+class ForeverCode : public Stmt {
+public:
+    std::vector<StmtPtr> body;
+};
+
 class CFDecl : public Stmt {
 public:
     std::string name;

@@ -4,11 +4,12 @@
 
 static const std::unordered_map<std::string, TokenType> keywords = {
     // Syntax
-    {"fn", TokenType::Fn}, {"ret", TokenType::Ret},
+    {"def", TokenType::Fn}, {"ret", TokenType::Ret},
     {"class", TokenType::Class}, {"public", TokenType::Public}, {"private", TokenType::Private},
     {"struct", TokenType::Struct},
     {"if", TokenType::If}, {"elif", TokenType::Elif}, {"else", TokenType::Else},
     {"while", TokenType::While}, {"for", TokenType::For}, {"in", TokenType::In},
+    {"repeat", TokenType::Repeat}, {"forever", TokenType::Forever},
     {"import", TokenType::Import},
     {"print", TokenType::Print}, {"println", TokenType::PrintLine},
     {"read", TokenType::Read}, {"readln", TokenType::ReadLine},
@@ -18,7 +19,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     // Data Types
     {"List", TokenType::List},
     {"int", TokenType::TypeInt},
-    {"string", TokenType::TypeString},
+    {"str", TokenType::TypeString},
     {"float", TokenType::TypeFloat},
     {"double", TokenType::TypeDouble},
     {"byte", TokenType::TypeByte},
@@ -26,6 +27,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"bool", TokenType::TypeBool},
     {"void", TokenType::TypeVoid},
     {"auto", TokenType::TypeAuto},
+    {"long", TokenType::TypeLong},
 };
 
 std::vector<Token> tokenize(const std::string& src) {

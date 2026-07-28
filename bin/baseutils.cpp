@@ -449,6 +449,21 @@ StmtPtr Parser::parseWhile() {
     return stmt;
 }
 
+StmtPtr Parser::parseRepeat() {
+    advance(); // repeat
+    auto value = std::make_shared<RepeatCode>();
+    value->value = parseExpression();
+    value->body = parseBlock();
+    return value;
+}
+
+StmtPtr Parser::parseForever() {
+    advance(); // forever
+    auto stmt = std::make_shared<ForeverCode>();
+    stmt->body = parseBlock();
+    return stmt;
+}
+
 StmtPtr Parser::parseForRange() {
     advance(); // 'for'
     Token nameTok = expect(TokenType::Identifier, "loop variable");
@@ -583,7 +598,7 @@ StmtPtr Parser::parseBreak() {
 StmtPtr Parser::parseClear() {
     advance(); // clear
     auto stmt = std::make_shared<ClearStmt>();
-    expect(TokenType::LParen, "("); expect(TokenType::RParen, ")");
+    
     if (check(TokenType::Semicolon)) {
         advance();
     }
@@ -667,6 +682,8 @@ StmtPtr Parser::parseStatement() {
     if (check(TokenType::Clear)) return parseClear();
     if (check(TokenType::ReadLine)) return parseReadLineCode();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
+    if (check(TokenType::Repeat)) return parseRepeat();
+    if (check(TokenType::Forever)) return parseForever();
 
     reportError("unexpected token '" + peek().text + "'");
     recoverStatement();
@@ -676,6 +693,15 @@ StmtPtr Parser::parseStatement() {
 StmtPtr Parser::parseSStr() {
     if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
+    if (check(TokenType::Print) || check(TokenType::PrintLine) || 
+        check(TokenType::If) || check(TokenType::Elif) || 
+        check(TokenType::Else) || check(TokenType::While) || 
+        check(TokenType::For) || check(TokenType::Read) || 
+        check(TokenType::ReadLine) || check(TokenType::Break) || 
+        check(TokenType::Clear) || check(TokenType::Continue) ||
+        check(TokenType::Ret) ||
+        check(TokenType::Repeat) ||
+        check(TokenType::Forever)) reportError("logic is not allowed in struct");
 
     reportError("unexpected token '" + peek().text + "'");
     recoverStatement();
@@ -685,18 +711,15 @@ StmtPtr Parser::parseSStr() {
 StmtPtr Parser::parseSClass() {
     if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
     if (check(TokenType::Fn)) return parseCFunction();
-    if (check(TokenType::Ret)) return parseReturn();
-    if (check(TokenType::If)) return parseIf();
-    if (check(TokenType::Elif)) return parseElif();
-    if (check(TokenType::Else)) return parseElse();
-    if (check(TokenType::While)) return parseWhile();
-    if (check(TokenType::For)) return parseForRange();
-    if (check(TokenType::Print) || check(TokenType::PrintLine)) return parsePrintCode();
-    if (check(TokenType::Read)) return parseReadCode();
-    if (check(TokenType::Continue)) return parseContinue();
-    if (check(TokenType::Break)) return parseBreak();
-    if (check(TokenType::Clear)) return parseClear();
-    if (check(TokenType::ReadLine)) return parseReadLineCode();
+    if (check(TokenType::Print) || check(TokenType::PrintLine) ||
+        check(TokenType::If) || check(TokenType::Elif) ||
+        check(TokenType::Else) || check(TokenType::While) ||
+        check(TokenType::For) || check(TokenType::Read) ||
+        check(TokenType::ReadLine) || check(TokenType::Break) ||
+        check(TokenType::Clear) || check(TokenType::Continue) || 
+        check(TokenType::Ret) ||
+        check(TokenType::Repeat) ||
+        check(TokenType::Forever)) reportError("logic is not allowed in class");
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
 
     reportError("unexpected token '" + peek().text + "'");
