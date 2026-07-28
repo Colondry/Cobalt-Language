@@ -5,6 +5,18 @@
 
 using namespace sdlint;
 
+RGB hexStringToRgb(const std::string& hexStr) {
+	RGB color{ 0, 0, 0 };
+
+	// Check if the string starts with '#' and offset the pointer accordingly
+	const char* cStr = (hexStr[0] == '#') ? hexStr.c_str() + 1 : hexStr.c_str();
+
+	// %02x reads exactly 2 hexadecimal characters
+	std::sscanf(cStr, "%02x%02x%02x", &color.r, &color.g, &color.b);
+
+	return color;
+}
+
 bool __Window__::Init(std::string title, int width, int height) {
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		std::fprintf(stderr, "sdl: SDL_Init() failed: %s\n", SDL_GetError());
@@ -32,7 +44,7 @@ bool __Window__::Init(std::string title, int width, int height) {
 	return true;
 }
 
-bool __Window__::PollEvents() {
+bool __Window__::UpdateEvents() {
 	if (!running || !window) return false;
 
 	SDL_Event event;
@@ -46,18 +58,19 @@ bool __Window__::PollEvents() {
 	return running;
 }
 
-void __Window__::Clear(int r, int g, int b) {
+void __Window__::BackColor(std::string hexColor) {
 	if (!renderer) return;
-	SDL_SetRenderDrawColor(renderer, (Uint8)r, (Uint8)g, (Uint8)b, 255);
+	RGB rgb = hexStringToRgb(hexColor);
+	SDL_SetRenderDrawColor(renderer, rgb.r, rgb.g, rgb.b, 255);
 	SDL_RenderClear(renderer);
 }
 
-void __Window__::Present() {
+void __Window__::Show() {
 	if (!renderer) return;
 	SDL_RenderPresent(renderer);
 }
 
-void __Window__::Quit() {
+void __Window__::Close() {
 	if (renderer) { SDL_DestroyRenderer(renderer); renderer = nullptr; }
 	if (window) { SDL_DestroyWindow(window); window = nullptr; }
 	SDL_Quit();
