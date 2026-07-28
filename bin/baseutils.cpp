@@ -10,7 +10,8 @@
 bool Parser::isTypeToken(TokenType t) const {
     return t == TokenType::TypeInt || t == TokenType::TypeString || t == TokenType::TypeFloat ||
         t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
-        t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto;
+        t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto   
+        ||  t == TokenType::TypeLong;
 }
 
 std::string Parser::typeName(TokenType t) {
@@ -24,6 +25,7 @@ std::string Parser::typeName(TokenType t) {
     case TokenType::TypeBool: return "bool";
     case TokenType::TypeVoid: return "void";
     case TokenType::TypeAuto: return "auto";
+    case TokenType::TypeLong: return "long double";
     default: return "auto";
     }
 }
@@ -339,9 +341,11 @@ StmtPtr Parser::parseVarDecl() {
                 }
             }
             expect(TokenType::RBracket, "]");
+            if (check(TokenType::Semicolon)) {
+                advance();
+            }
             decl->init = lit;
         }
-        expect(TokenType::Semicolon, ";");
         return decl;
     }
     else if (check(TokenType::TypeVoid)) {
@@ -359,21 +363,26 @@ StmtPtr Parser::parseVarDecl() {
     }
     if (match(TokenType::Assign)) {
         decl->init = parseExpression();
-        expect(TokenType::Semicolon, ";");
     }
-    else if (check(TokenType::Semicolon)) {
+    else if (!check(TokenType::Assign)) {
         reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
-        advance(); // consume the ';' so parsing can continue past this statement
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
     }
     else {
-        expect(TokenType::Semicolon, ";"); // some other unexpected token -- report it and try to recover
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
     }
     return decl;
 }
 
 StmtPtr Parser::parseAssignOrExprStatement() {
     if (auto amms = parseAssignAMMS()) {
-        expect(TokenType::Semicolon, ";");
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
         return amms;
     }
 
@@ -384,12 +393,14 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         auto stmt = std::make_shared<AssignStmt>();
         stmt->name = name;
         stmt->value = parseExpression();
-        expect(TokenType::Semicolon, ";");
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
         return stmt;
     }
 
     ExprPtr expr = parseExpression();
-    expect(TokenType::Semicolon, ";");
+    advance();
     auto stmt = std::make_shared<ExprStmt>();
     stmt->expr = expr;
     return stmt;
@@ -401,7 +412,9 @@ StmtPtr Parser::parseReturn() {
     if (!check(TokenType::Semicolon)) {
         stmt->value = parseExpression();
     }
-    expect(TokenType::Semicolon, ";");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     return stmt;
 }
 
@@ -466,7 +479,9 @@ StmtPtr Parser::parsePrintCode() {
         stmt->value = parseExpression();
     }
     expect(TokenType::RParen, ")");
-    expect(TokenType::Semicolon, ";");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     return stmt;
 }
 
@@ -494,7 +509,9 @@ StmtPtr Parser::parseReadCode() {
     }
 
     expect(TokenType::RParen, ")");
-    expect(TokenType::Semicolon, ";");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     return stmt;
 }
 
@@ -539,21 +556,27 @@ StmtPtr Parser::parseReadLineCode() {
     }
 
     expect(TokenType::RParen, ")");
-    expect(TokenType::Semicolon, ";");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     return stmt;
 }
 
 StmtPtr Parser::parseContinue() {
     advance(); // 'continue'
     auto stmt = std::make_shared<ContinueStmt>();
-    expect(TokenType::Semicolon, ";");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     return stmt;
 }
 
 StmtPtr Parser::parseBreak() {
     advance(); // 'break'
     auto stmt = std::make_shared<BreakStmt>();
-    expect(TokenType::Semicolon, ";");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     return stmt;
 }
 
@@ -561,7 +584,9 @@ StmtPtr Parser::parseClear() {
     advance(); // clear
     auto stmt = std::make_shared<ClearStmt>();
     expect(TokenType::LParen, "("); expect(TokenType::RParen, ")");
-    expect(TokenType::Semicolon, ";");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     return stmt;
 }
 
@@ -577,7 +602,9 @@ std::vector<StmtPtr> Parser::parseCFBlock() {
     }
     else {
         expect(TokenType::RBrace, "}");
-        expect(TokenType::Semicolon, ";");
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
     }
     return stmts;
 }
@@ -593,7 +620,9 @@ std::vector<StmtPtr> Parser::parseSFBlock() {
     }
     else {
         expect(TokenType::RBrace, "}");
-        expect(TokenType::Semicolon, ";");
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
     }
     return stmts;
 }
@@ -711,7 +740,9 @@ void Parser::parseCBlock(ClassDecl& cls) {
     }
     else {
         expect(TokenType::RBrace, "}");
-        expect(TokenType::Semicolon, ";");
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
     }
 }
 
@@ -726,7 +757,9 @@ void Parser::parseSBlock(StructCode& str) {
     }
     else {
         expect(TokenType::RBrace, "}");
-        expect(TokenType::Semicolon, ";");
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
     }
 }
 
