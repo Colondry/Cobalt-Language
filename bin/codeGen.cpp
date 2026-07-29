@@ -56,6 +56,7 @@ static std::string emitExpr(const ExprPtr& e) {
     if (auto idx = std::dynamic_pointer_cast<IndexExpr>(e))
         return emitExpr(idx->base) + "[" + emitExpr(idx->index) + "]";
     if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return pi->name + "++";
+    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) return pm->name + "--";
     if (auto lit = std::dynamic_pointer_cast<ListLit>(e)) {
         std::string out = "{";
         for (size_t i = 0; i < lit->items.size(); i++) {
@@ -253,8 +254,8 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto rp = std::dynamic_pointer_cast<RepeatCode>(stmt)) {
         out << indent(depth)
-            << "for (double __value__ = 0; __value__ =< "
-            << rp->value
+            << "for (int __value__ = 0; __value__ < "
+            << emitExpr(rp->value)
             << "; __value__++) {\n";
         emitBlock(rp->body, depth + 1, out);
         out << indent(depth) << "}\n";

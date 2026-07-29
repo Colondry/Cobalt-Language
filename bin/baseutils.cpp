@@ -10,8 +10,8 @@
 bool Parser::isTypeToken(TokenType t) const {
     return t == TokenType::TypeInt || t == TokenType::TypeString || t == TokenType::TypeFloat ||
         t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
-        t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto   
-        ||  t == TokenType::TypeLong;
+        t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto
+        || t == TokenType::TypeLong;
 }
 
 std::string Parser::typeName(TokenType t) {
@@ -196,16 +196,16 @@ ExprPtr Parser::parsePostfix() {
                 break;
             }
         }
-        else if (check(TokenType::MinusMinus)) { // ++
+        else if (check(TokenType::MinusMinus)) { // --
             if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
                 advance();
-                auto inc = std::make_shared<PostIncExpr>();
-                inc->name = name->name;
-                expr = inc;
+                auto dec = std::make_shared<PostMinExpr>();
+                dec->name = name->name;
+                expr = dec;
             }
             else {
                 reportError("'--' can only be applied to a variable name");
-                advance(); // consume the '++' so we don't loop forever
+                advance(); // consume the '--' so we don't loop forever
                 break;
             }
         }
@@ -363,14 +363,12 @@ StmtPtr Parser::parseVarDecl() {
     }
     if (match(TokenType::Assign)) {
         decl->init = parseExpression();
-    }
-    else if (!check(TokenType::Assign)) {
-        reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
         if (check(TokenType::Semicolon)) {
             advance();
         }
     }
     else {
+        reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
         if (check(TokenType::Semicolon)) {
             advance();
         }
@@ -393,6 +391,7 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         auto stmt = std::make_shared<AssignStmt>();
         stmt->name = name;
         stmt->value = parseExpression();
+        advance();
         if (check(TokenType::Semicolon)) {
             advance();
         }
@@ -400,7 +399,9 @@ StmtPtr Parser::parseAssignOrExprStatement() {
     }
 
     ExprPtr expr = parseExpression();
-    advance();
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
     auto stmt = std::make_shared<ExprStmt>();
     stmt->expr = expr;
     return stmt;
@@ -598,7 +599,7 @@ StmtPtr Parser::parseBreak() {
 StmtPtr Parser::parseClear() {
     advance(); // clear
     auto stmt = std::make_shared<ClearStmt>();
-    
+
     if (check(TokenType::Semicolon)) {
         advance();
     }
@@ -693,11 +694,11 @@ StmtPtr Parser::parseStatement() {
 StmtPtr Parser::parseSStr() {
     if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
-    if (check(TokenType::Print) || check(TokenType::PrintLine) || 
-        check(TokenType::If) || check(TokenType::Elif) || 
-        check(TokenType::Else) || check(TokenType::While) || 
-        check(TokenType::For) || check(TokenType::Read) || 
-        check(TokenType::ReadLine) || check(TokenType::Break) || 
+    if (check(TokenType::Print) || check(TokenType::PrintLine) ||
+        check(TokenType::If) || check(TokenType::Elif) ||
+        check(TokenType::Else) || check(TokenType::While) ||
+        check(TokenType::For) || check(TokenType::Read) ||
+        check(TokenType::ReadLine) || check(TokenType::Break) ||
         check(TokenType::Clear) || check(TokenType::Continue) ||
         check(TokenType::Ret) ||
         check(TokenType::Repeat) ||
@@ -716,7 +717,7 @@ StmtPtr Parser::parseSClass() {
         check(TokenType::Else) || check(TokenType::While) ||
         check(TokenType::For) || check(TokenType::Read) ||
         check(TokenType::ReadLine) || check(TokenType::Break) ||
-        check(TokenType::Clear) || check(TokenType::Continue) || 
+        check(TokenType::Clear) || check(TokenType::Continue) ||
         check(TokenType::Ret) ||
         check(TokenType::Repeat) ||
         check(TokenType::Forever)) reportError("logic is not allowed in class");

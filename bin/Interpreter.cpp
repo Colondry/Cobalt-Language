@@ -242,6 +242,11 @@ static Value evaluateExpr(const ExprPtr& e) {
         target.intValue++;
         return target;
     }
+    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) {
+        Value& target = lvalue(pm->name);
+        target.intValue--;
+        return target;
+    }
     if (auto lit = std::dynamic_pointer_cast<ListLit>(e)) {
         Value v;
         v.type = ValueType::String;
@@ -423,6 +428,25 @@ static ExecResult execStmt(const StmtPtr& stmt) {
     if (auto cd = std::dynamic_pointer_cast<ClearStmt>(stmt)) {
         std::cout << "\033[2J\033[H";
         std::cout.flush();
+        return {};
+    }
+    if (auto rp = std::dynamic_pointer_cast<RepeatCode>(stmt)) {
+        Value value = evaluateExpr(rp->value);
+        int x = 0;
+        while (x < value.intValue) {
+            ExecResult r = execBlock(rp->body);
+            if (r.state == ExecState::Break) break;
+            if (r.state == ExecState::Return) return r;
+            x++;
+        }
+        return {};
+    }
+    if (auto fr = std::dynamic_pointer_cast<ForeverCode>(stmt)) {
+        while (true) {
+            ExecResult r = execBlock(fr->body);
+            if (r.state == ExecState::Break) break;
+            if (r.state == ExecState::Return) return r;
+        }
         return {};
     }
 
