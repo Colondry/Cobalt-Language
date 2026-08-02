@@ -10,21 +10,24 @@ enum class TokenType {
     // keywords
     Class, Public, Private,
     Struct,
-    Fn, Ret,
+    Fn, Ret, Lambda,
     If, Elif, Else,
     While, For, Repeat, Forever,
     In,
     Import,
     List,
     Print, PrintLine, Read, ReadLine,
+    PrintMac, PrintMacLn,
     Continue, Break,
     Clear,
     // built-in types
-    TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte, TypeChar, TypeBool, TypeVoid, TypeAuto,
-    TypeLong,
+    TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte,
+    TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,
+    TypeLong, TypeInt8, TypeInt16, TypeInt32, TypeInt64,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,
+    Not,
     // operators
     Assign, Eq, Neq, Lt, Gt, Le, Ge, AndAnd, OrOr,
     Plus, Minus, Star, Slash, Shl, Shr,

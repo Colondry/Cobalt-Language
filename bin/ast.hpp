@@ -21,9 +21,11 @@ class StringLit : public Expr { public: std::string value; }; // includes quotes
 class CharLit : public Expr { public: std::string value; }; // includes single quotes
 class NameExpr : public Expr { public: std::string name; };
 class ListLit : public Expr { public: std::vector<ExprPtr> items; double index; };
+class FracLit : public Expr { public: std::vector<ExprPtr> items; double index; };
 class IndexExpr : public Expr { public: ExprPtr base; ExprPtr index; };
 class CallExpr : public Expr { public: std::string callee; std::vector<ExprPtr> args; };
 class PostIncExpr : public Expr { public: std::string name; };
+class PostMinExpr : public Expr { public: std::string name; };
 class UnaryExpr : public Expr { public: std::string op; ExprPtr operand; };
 class BinaryExpr : public Expr { public: std::string op; ExprPtr lhs; ExprPtr rhs; };
 
@@ -41,6 +43,7 @@ class VarDecl : public Stmt {
 public:
     std::string type;      // int, string, float, double, byte, char, List
     std::string elemType;  // element type when type == "List"
+    std::string secElemType;
     std::string name;
     int arraySize = -1;    // >=0 for "char c[20]"
     ExprPtr init;          // never null -- every declaration requires an initializer (memory safety)
@@ -61,10 +64,15 @@ struct MethodCallExpr : Expr
 };
 
 class AssignStmt : public Stmt { public: std::string name; ExprPtr value; };
+// Assignment to a general lvalue expression -- e.g. `Chart.Color = "#FFF"`
+// (MemberExpr) or `list[i] = x` (IndexExpr). AssignStmt above only covers
+// a bare `name = value`.
+class ExprAssignStmt : public Stmt { public: ExprPtr target; ExprPtr value; };
 class ReturnStmt : public Stmt { public: ExprPtr value; }; // value may be null
 class ExprStmt : public Stmt { public: ExprPtr expr; };
 
 class PrintCode : public Stmt { public: bool newline = false; ExprPtr value; int toRight = 1; };
+class PrintMacCode : public Stmt { public: bool newline = false; ExprPtr value; };
 
 class ReadCode : public Stmt { public: ExprPtr prompt; std::string varName; };
 class ReadLine : public Stmt { public: ExprPtr prompt; std::string varName; std::string limit; };
@@ -134,6 +142,13 @@ public:
 };
 
 class CFuncDecl : public Stmt {
+public:
+    std::string name;
+    std::vector<Param> params;
+    std::string returnType;
+    std::vector<StmtPtr> body;
+};
+class LambFuncDecl : public Stmt {
 public:
     std::string name;
     std::vector<Param> params;

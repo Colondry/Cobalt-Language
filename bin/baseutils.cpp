@@ -7,14 +7,20 @@
 
 // ---------- Type tokens ----------
 
-bool Parser::isTypeToken(TokenType t) const {
+bool Parser::isTypeToken(TokenType t, std::string type) {
+    for (const StructCode& sc : program.struc) {
+        if (sc.name == type) {
+            return true;
+        }
+    }
     return t == TokenType::TypeInt || t == TokenType::TypeString || t == TokenType::TypeFloat ||
         t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
         t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto
-        || t == TokenType::TypeLong;
+        || t == TokenType::TypeInt8 || t == TokenType::TypeInt16 || t == TokenType::TypeInt32
+        || t == TokenType::TypeInt64 || t == TokenType::TypeFrac;
 }
 
-std::string Parser::typeName(TokenType t) {
+std::string Parser::typeName(std::string type, TokenType t) {
     switch (t) {
     case TokenType::TypeInt: return "int";
     case TokenType::TypeString: return "string";
@@ -26,18 +32,29 @@ std::string Parser::typeName(TokenType t) {
     case TokenType::TypeVoid: return "void";
     case TokenType::TypeAuto: return "auto";
     case TokenType::TypeLong: return "long double";
-    default: return "auto";
+    case TokenType::TypeInt8: return "std::uint8_t";
+    case TokenType::TypeInt16: return "std::uint16_t";
+    case TokenType::TypeInt32: return "std::uint32_t";
+    case TokenType::TypeInt64: return "std::uint64_t";
+    default:
+        for (const StructCode& sc : program.struc) {
+            if (sc.name == type) {
+                return "__" + type + "__";
+            }
+        }
+        return peek().text;
     }
 }
 
 std::string Parser::expectType() {
-    if (!isTypeToken(peek().type)) {
+    std::string ty = peek().text;
+    if (!isTypeToken(peek().type, ty)) {
         reportError("expected a data type (int, string, float, double, byte, char, bool, void) but got '" +
             peek().text + "'");
         advance();
-        return "int";
+        return "auto";
     }
-    return typeName(advance().type);
+    return typeName(ty, advance().type);
 }
 
 // ---------- Expressions ----------
@@ -72,6 +89,19 @@ ExprPtr Parser::parseExpression() {
         ExprPtr rhs = parseLogicalOr();
         if (isShl) chain->pieces.insert(chain->pieces.begin(), rhs);  // '<<' -> starts from the right
         else chain->pieces.push_back(rhs);                            // '>>' -> starts from the left
+    }
+    return chain;
+}
+ExprPtr Parser::parseMacExpression() {
+    ExprPtr base = parseLogicalOr();
+    if (!check(TokenType::Comma)) return base;
+
+    auto chain = std::make_shared<ConcatExpr>();
+    chain->pieces.push_back(base);
+    while (check(TokenType::Comma)) {
+        advance();
+        ExprPtr rhs = parseLogicalOr();
+        chain->pieces.push_back(rhs);
     }
     return chain;
 }
@@ -307,11 +337,11 @@ ExprPtr Parser::parsePrimary() {
 
 // ---------- Statements ----------
 
-std::vector<StmtPtr> Parser::parseBlock() {
+std::vector<StmtPtr> Parser::parseBlock(std::string retype) {
     expect(TokenType::LBrace, "{");
     std::vector<StmtPtr> stmts;
     while (!check(TokenType::RBrace) && !check(TokenType::EndOfFile)) {
-        StmtPtr s = parseStatement();
+        StmtPtr s = parseStatement(retype);
         if (s) stmts.push_back(s);
     }
     expect(TokenType::RBrace, "}");
@@ -345,6 +375,63 @@ StmtPtr Parser::parseVarDecl() {
                 advance();
             }
             decl->init = lit;
+        }
+        else {
+            reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
+            if (check(TokenType::Semicolon)) {
+                advance();
+            }
+        }
+        return decl;
+    }
+    else if (check(TokenType::TypeFrac)) {
+        advance(); // 'frac'
+        auto decl = std::make_shared<VarDecl>();
+        decl->type = "Fraction";
+        expect(TokenType::Lt, "<");
+        decl->elemType = expectType();
+        if (check(TokenType::Comma)) {
+            advance();
+            decl->secElemType = expectType();
+        }
+        else {
+            decl->secElemType = decl->elemType;
+        }
+        expect(TokenType::Gt, ">");
+        Token nameTok = expect(TokenType::Identifier, "variable name");
+        decl->name = nameTok.text;
+
+        if (match(TokenType::Assign)) {
+            expect(TokenType::LBracket, "[");
+            auto lit = std::make_shared<FracLit>();
+            if (!check(TokenType::RBracket)) {
+                lit->items.push_back(parseExpression()); lit->index++;
+                if (lit->index > 2) {
+                    reportError("fraction index cannot be more than 2.");
+                }
+                while (match(TokenType::Comma))
+                {
+                    lit->items.push_back(parseExpression());
+                    lit->index++;
+                    if (lit->index > 2) {
+                        reportError("fraction index cannot be more than 2.");
+                    }
+                }
+                if (lit->index > 2) {
+                    reportError("fraction index cannot be more than 2.");
+                }
+            }
+            expect(TokenType::RBracket, "]");
+            if (check(TokenType::Semicolon)) {
+                advance();
+            }
+            decl->init = lit;
+        }
+        else {
+            reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
+            if (check(TokenType::Semicolon)) {
+                advance();
+            }
         }
         return decl;
     }
@@ -391,7 +478,6 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         auto stmt = std::make_shared<AssignStmt>();
         stmt->name = name;
         stmt->value = parseExpression();
-        advance();
         if (check(TokenType::Semicolon)) {
             advance();
         }
@@ -399,6 +485,22 @@ StmtPtr Parser::parseAssignOrExprStatement() {
     }
 
     ExprPtr expr = parseExpression();
+
+    // `object.field = value` (MemberExpr) or `list[i] = value` (IndexExpr)
+    // -- the bare-identifier fast path above only catches `name = value`,
+    // so a general lvalue expression followed by '=' lands here instead.
+    if ((std::dynamic_pointer_cast<MemberExpr>(expr) || std::dynamic_pointer_cast<IndexExpr>(expr))
+        && check(TokenType::Assign)) {
+        advance(); // '='
+        auto stmt = std::make_shared<ExprAssignStmt>();
+        stmt->target = expr;
+        stmt->value = parseExpression();
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
+        return stmt;
+    }
+
     if (check(TokenType::Semicolon)) {
         advance();
     }
@@ -407,12 +509,26 @@ StmtPtr Parser::parseAssignOrExprStatement() {
     return stmt;
 }
 
-StmtPtr Parser::parseReturn() {
+StmtPtr Parser::parseReturn(std::string retype) {
     advance(); // 'ret'
     auto stmt = std::make_shared<ReturnStmt>();
-    if (!check(TokenType::Semicolon)) {
-        stmt->value = parseExpression();
+    if (retype != "void") {
+        if (!check(TokenType::Semicolon)) {
+            stmt->value = parseExpression();
+        }
     }
+    else if (retype == "void") {
+        reportError("ret cannot be used in a void function.");
+    }
+    else if (retype == "") {
+        reportError("ret cannot be used outside a function.");
+        advance();
+    }
+    else {
+        reportError("Unknown return error.");
+        advance();
+    }
+
     if (check(TokenType::Semicolon)) {
         advance();
     }
@@ -423,7 +539,7 @@ StmtPtr Parser::parseIf() {
     advance(); // 'if'
     auto stmt = std::make_shared<IfStmt>();
     stmt->condition = parseExpression();
-    stmt->body = parseBlock();
+    stmt->body = parseBlock("");
     return stmt;
 }
 
@@ -431,14 +547,14 @@ StmtPtr Parser::parseElif() {
     advance(); // 'elif'
     auto stmt = std::make_shared<ElifStmt>();
     stmt->condition = parseExpression();
-    stmt->body = parseBlock();
+    stmt->body = parseBlock("");
     return stmt;
 }
 
 StmtPtr Parser::parseElse() {
     advance(); // 'else'
     auto stmt = std::make_shared<ElseStmt>();
-    stmt->body = parseBlock();
+    stmt->body = parseBlock("");
     return stmt;
 }
 
@@ -446,7 +562,7 @@ StmtPtr Parser::parseWhile() {
     advance(); // 'while'
     auto stmt = std::make_shared<WhileStmt>();
     stmt->condition = parseExpression();
-    stmt->body = parseBlock();
+    stmt->body = parseBlock("");
     return stmt;
 }
 
@@ -454,14 +570,14 @@ StmtPtr Parser::parseRepeat() {
     advance(); // repeat
     auto value = std::make_shared<RepeatCode>();
     value->value = parseExpression();
-    value->body = parseBlock();
+    value->body = parseBlock("");
     return value;
 }
 
 StmtPtr Parser::parseForever() {
     advance(); // forever
     auto stmt = std::make_shared<ForeverCode>();
-    stmt->body = parseBlock();
+    stmt->body = parseBlock("");
     return stmt;
 }
 
@@ -480,7 +596,7 @@ StmtPtr Parser::parseForRange() {
     expect(TokenType::Comma, ",");
     stmt->to = parseExpression();
     expect(TokenType::RParen, ")");
-    stmt->body = parseBlock();
+    stmt->body = parseBlock("");
     return stmt;
 }
 
@@ -493,6 +609,23 @@ StmtPtr Parser::parsePrintCode() {
     stmt->newline = newline;
     if (!check(TokenType::RParen)) {
         stmt->value = parseExpression();
+    }
+    expect(TokenType::RParen, ")");
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
+    return stmt;
+}
+StmtPtr Parser::parsePrintMac() {
+    bool newline = check(TokenType::PrintMacLn);
+    advance(); // 'print!' or 'println!'
+    if (check(TokenType::Not)) advance();
+    expect(TokenType::LParen, "(");
+
+    auto stmt = std::make_shared<PrintMacCode>();
+    stmt->newline = newline;
+    if (!check(TokenType::RParen)) {
+        stmt->value = parseMacExpression();
     }
     expect(TokenType::RParen, ")");
     if (check(TokenType::Semicolon)) {
@@ -606,11 +739,11 @@ StmtPtr Parser::parseClear() {
     return stmt;
 }
 
-std::vector<StmtPtr> Parser::parseCFBlock() {
+std::vector<StmtPtr> Parser::parseCFBlock(std::string retype) {
     expect(TokenType::LBrace, "{");
     std::vector<StmtPtr> stmts;
     while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
-        StmtPtr s = parseStatement();
+        StmtPtr s = parseStatement(retype);
         if (s) stmts.push_back(s);
     }
     if (check(TokenType::SClose)) {
@@ -660,17 +793,65 @@ StmtPtr Parser::parseCFunction() {
         } while (match(TokenType::Comma));
     }
     expect(TokenType::RParen, ")");
-    expect(TokenType::Colon, ":");
-    fn.returnType = expectType(); fnd->returnType = fn.returnType;
-    fnd->body = parseCFBlock();
+    if (check(TokenType::Colon)) {
+        advance();
+        fn.returnType = expectType();
+    }
+    else {
+        if (fn.name == "main") {
+            fn.returnType = "int";
+        }
+        else {
+            fn.returnType = "auto";
+        }
+    }
+    fnd->returnType = fn.returnType;
+    fnd->body = parseCFBlock(fn.returnType);
     fn.body = fnd->body;
 
     return fnd;
 }
 
-StmtPtr Parser::parseStatement() {
-    if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
-    if (check(TokenType::Ret)) return parseReturn();
+StmtPtr Parser::parseLambdaFn(std::string retype) {
+    advance(); // 'lambda'
+    Token nameTok = expect(TokenType::Identifier, "function name");
+    expect(TokenType::LParen, "(");
+
+    LambFuncDecl fn;
+    auto fnd = std::make_shared<LambFuncDecl>();
+    fn.name = nameTok.text; fnd->name = nameTok.text;
+    if (!check(TokenType::RParen)) {
+        do {
+            Param p;
+            p.type = expectType();
+            p.name = expect(TokenType::Identifier, "parameter name").text;
+            fn.params.push_back(p); fnd->params.push_back(p);
+        } while (match(TokenType::Comma));
+    }
+    expect(TokenType::RParen, ")");
+    if (check(TokenType::Colon)) {
+        advance();
+        fn.returnType = expectType();
+    }
+    else {
+        if (fn.name == "main") {
+            fn.returnType = "int";
+        }
+        else {
+            fn.returnType = "auto";
+        }
+    }
+    fnd->returnType = fn.returnType;
+    fnd->body = parseCFBlock(fn.returnType);
+    fn.body = fnd->body;
+
+    return fnd;
+}
+
+StmtPtr Parser::parseStatement(std::string retype) {
+    if (isTypeToken(peek().type, peek().text) || check(TokenType::List)) return parseVarDecl();
+    if (check(TokenType::Ret)) return parseReturn(retype);
+    if (check(TokenType::Lambda)) return parseLambdaFn(retype);
     if (check(TokenType::If)) return parseIf();
     if (check(TokenType::Elif)) return parseElif();
     if (check(TokenType::Else)) return parseElse();
@@ -685,6 +866,7 @@ StmtPtr Parser::parseStatement() {
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
     if (check(TokenType::Repeat)) return parseRepeat();
     if (check(TokenType::Forever)) return parseForever();
+    if (check(TokenType::PrintMac) || check(TokenType::PrintMacLn)) return parsePrintMac();
 
     reportError("unexpected token '" + peek().text + "'");
     recoverStatement();
@@ -692,7 +874,7 @@ StmtPtr Parser::parseStatement() {
 }
 
 StmtPtr Parser::parseSStr() {
-    if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
+    if (isTypeToken(peek().type, peek().text) || check(TokenType::List)) return parseVarDecl();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||
         check(TokenType::If) || check(TokenType::Elif) ||
@@ -710,7 +892,7 @@ StmtPtr Parser::parseSStr() {
 }
 
 StmtPtr Parser::parseSClass() {
-    if (isTypeToken(peek().type) || check(TokenType::List)) return parseVarDecl();
+    if (isTypeToken(peek().type, peek().text) || check(TokenType::List)) return parseVarDecl();
     if (check(TokenType::Fn)) return parseCFunction();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||
         check(TokenType::If) || check(TokenType::Elif) ||
@@ -827,7 +1009,7 @@ FunctionDecl Parser::parseFunction() {
             fn.returnType = "auto";
         }
     }
-    fn.body = parseBlock();
+    fn.body = parseBlock(fn.returnType);
     return fn;
 }
 

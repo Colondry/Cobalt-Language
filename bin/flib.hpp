@@ -4,10 +4,9 @@
 #include <string>
 #include <vector>
 
-// Removes a trailing '\r' left over from Windows-style line endings.
-void stripCR(std::string& line);
 
-// Strips a trailing "# comment", ignoring '#' that appears inside a string.
+void stripCR(std::string& line);
+// Strips "# ...."
 void stripComment(std::string& line);
 std::string preprocessFile(const std::string& sourcePath);
 std::string findFile(const std::string& filename);

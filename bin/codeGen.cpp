@@ -5,6 +5,8 @@
 #include <sstream>
 #include <cstdlib>
 #include <filesystem>
+#include <regex>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -36,6 +38,15 @@ static std::string emitCFDSignature(const CFDecl& fn) {
     return out += ")";
 }
 
+static std::string emitLambSignature(const LambFuncDecl& fn) {
+    std::string out = "auto " + fn.name + " = [](";
+    for (size_t i = 0; i < fn.params.size(); i++) {
+        if (i) out += ", ";
+        out += cppType(fn.params[i].type) + " " + fn.params[i].name;
+    }
+    return out += ") -> " + cppType(fn.returnType);
+}
+
 static std::string emitCFSignature(const CFuncDecl& fn) {
     std::string out = cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
@@ -62,6 +73,14 @@ static std::string emitExpr(const ExprPtr& e) {
         for (size_t i = 0; i < lit->items.size(); i++) {
             if (i) out += ", ";
             out += emitExpr(lit->items[i]);
+        }
+        return out + "}";
+    }
+    if (auto fl = std::dynamic_pointer_cast<FracLit>(e)) {
+        std::string out = "{";
+        for (size_t i = 0; i < fl->items.size(); i++) {
+            if (i) out += ", ";
+            out += emitExpr(fl->items[i]);
         }
         return out + "}";
     }
@@ -115,6 +134,60 @@ static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::of
     if (newline) out << " << \"\\n\"";
     out << ";\n";
 }
+// println!("fmt {} string {}", a, b) is parsed as a ConcatExpr whose first
+// piece is the format-string literal and whose remaining pieces are the
+// substitution arguments, one per "{}". std::print/std::format are C++23
+// (not available on the GCC 13 toolchain this compiles with), so instead we
+// split the format string on "{}" and weave the pieces together with
+// std::cout <<, the same way emitPrintStmt already works.
+static void emitPrintMacStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
+    out << indent(depth) << "std::cout";
+
+    if (value) {
+        auto c = std::dynamic_pointer_cast<ConcatExpr>(value);
+        std::shared_ptr<StringLit> fmt = c && !c->pieces.empty()
+            ? std::dynamic_pointer_cast<StringLit>(c->pieces[0])
+            : std::dynamic_pointer_cast<StringLit>(value);
+
+        if (fmt) {
+            // fmt->value includes the surrounding quotes; strip them so we
+            // can scan the raw characters for "{}" placeholders.
+            std::string raw = fmt->value;
+            if (raw.size() >= 2) raw = raw.substr(1, raw.size() - 2);
+
+            const std::vector<ExprPtr> args = c ? std::vector<ExprPtr>(c->pieces.begin() + 1, c->pieces.end()) : std::vector<ExprPtr>{};
+            size_t argIdx = 0;
+            std::string literalChunk;
+
+            auto flushLiteral = [&]() {
+                out << " << \"" << literalChunk << "\"";
+                literalChunk.clear();
+                };
+
+            for (size_t i = 0; i < raw.size(); i++) {
+                if (raw[i] == '{' && i + 1 < raw.size() && raw[i + 1] == '}') {
+                    flushLiteral();
+                    if (argIdx < args.size()) {
+                        out << " << " << emitExpr(args[argIdx++]);
+                    }
+                    i++; // skip the '}'
+                }
+                else {
+                    literalChunk += raw[i];
+                }
+            }
+            if (!literalChunk.empty()) flushLiteral();
+        }
+        else if (c) {
+            out << " << " << emitConcatPieces(c);
+        }
+        else {
+            out << " << " << emitExpr(value);
+        }
+    }
+    if (newline) out << " << \"\\n\"";
+    out << ";\n";
+}
 
 static void emitContinueStmt(int depth, std::ofstream& out) {
     out << indent(depth) << "continue;\n";
@@ -145,13 +218,16 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         if (v->type == "List") {
             out << "std::vector<" << cppType(v->elemType) << "> " << v->name;
         }
+        else if (v->type == "Fraction") {
+            out << "__Fraction__<" << cppType(v->elemType) << ", " << cppType(v->secElemType) << "> " << v->name;
+        }
         else if (v->arraySize >= 0) {
             out << cppType(v->type) << " " << v->name << "[" << v->arraySize << "]";
         }
         else {
             out << cppType(v->type) << " " << v->name;
         }
-        if (v->init) out << " = " << emitExpr(v->init);
+        out << " = " << emitExpr(v->init);
         out << ";\n";
         return;
     }
@@ -165,12 +241,20 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << indent(depth) << a->name << " = " << emitExpr(a->value) << ";\n";
         return;
     }
+    if (auto ea = std::dynamic_pointer_cast<ExprAssignStmt>(stmt)) {
+        out << indent(depth) << emitExpr(ea->target) << " = " << emitExpr(ea->value) << ";\n";
+        return;
+    }
     if (auto r = std::dynamic_pointer_cast<ReturnStmt>(stmt)) {
         out << indent(depth) << "return" << (r->value ? " " + emitExpr(r->value) : "") << ";\n";
         return;
     }
     if (auto p = std::dynamic_pointer_cast<PrintCode>(stmt)) {
         emitPrintStmt(p->value, p->newline, depth, out);
+        return;
+    }
+    if (auto p = std::dynamic_pointer_cast<PrintMacCode>(stmt)) {
+        emitPrintMacStmt(p->value, p->newline, depth, out);
         return;
     }
     if (auto in = std::dynamic_pointer_cast<ReadCode>(stmt)) {
@@ -267,6 +351,12 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << indent(depth) << "}\n";
         return;
     }
+    if (auto lfn = std::dynamic_pointer_cast<LambFuncDecl>(stmt)) {
+        out << indent(depth) << emitLambSignature(*lfn) << " {\n";
+        emitBlock(lfn->body, depth + 1, out);
+        out << indent(depth) << "};\n";
+        return;
+    }
 
     std::cerr << "codeGen error: no emitter for this statement type.\n";
     std::exit(EXIT_FAILURE);
@@ -295,6 +385,44 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
     file << "#include <limits>\n";
+    file << "#include <utility>\n";
+    file << "\n";
+    file << "// Backing type for Cobalt's frac<T> / frac<T1,T2> -- a simple\n";
+    file << "// numerator/denominator pair that prints as \"num/denom\", and\n";
+    file << "// converts implicitly to std::pair<A,B> for libraries (like a\n";
+    file << "// math library) written against std::pair directly.\n";
+    file << "template<typename __FracA__, typename __FracB__>\n";
+    file << "struct __Fraction__ {\n";
+    file << "    __FracA__ first;\n";
+    file << "    __FracB__ second;\n";
+    file << "    operator std::pair<__FracA__, __FracB__>() const { return {first, second}; }\n";
+    file << "};\n";
+    file << "template<typename __FracA__, typename __FracB__>\n";
+    file << "std::ostream& operator<<(std::ostream& os, const __Fraction__<__FracA__, __FracB__>& f) {\n";
+    file << "    return os << f.first << \"/\" << f.second;\n";
+    file << "}\n";
+
+    // Some libraries (e.g. chart, sdl3_win64) ship their own global
+    // singleton instance (`__Table__ Table;` defined once in their .cpp,
+    // `extern __Table__ Table;` declared in their header) rather than
+    // relying on the auto-declared instance codeGen normally creates for an
+    // object name it doesn't recognize (see the usedObjects loop below).
+    // Scan each imported library's header(s) for that `extern` pattern so
+    // we know which names are already provided -- otherwise codeGen would
+    // also emit `__Table__ Table;` in the generated main file and the
+    // linker would see two definitions of `Table`.
+    std::unordered_set<std::string> libraryProvidedGlobals;
+    static const std::regex externGlobalRe(R"(extern\s+__[A-Za-z0-9_]+__\s+([A-Za-z0-9_]+)\s*;)");
+    auto scanFileForExternGlobals = [&](const fs::path& path) {
+        std::ifstream in(path);
+        if (!in) return;
+        std::stringstream ss;
+        ss << in.rdbuf();
+        std::string text = ss.str();
+        for (std::sregex_iterator it(text.begin(), text.end(), externGlobalRe), end; it != end; ++it) {
+            libraryProvidedGlobals.insert((*it)[1].str());
+        }
+        };
 
     for (const LibImport& imp : program.imports) {
         std::string headerPath;
@@ -306,9 +434,23 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
             std::error_code ec;
             if (fs::exists(hpp, ec) && !ec) headerPath = hpp.string();
             else if (fs::exists(h, ec) && !ec) headerPath = h.string();
+
+            // Bundle libraries can spread their globals across several
+            // headers (Window.hpp, Draw.hpp, ...) beyond just the one
+            // matching the import name, so scan every header in the bundle.
+            std::error_code dirEc;
+            for (const auto& entry : fs::directory_iterator(bundleDir, dirEc)) {
+                if (dirEc) break;
+                if (!entry.is_regular_file()) continue;
+                auto ext = entry.path().extension();
+                if (ext == ".hpp" || ext == ".h") scanFileForExternGlobals(entry.path());
+            }
         }
         if (headerPath.empty()) {
             headerPath = findLibraryFile(imp.libName, ".hpp", inputFileDir);
+        }
+        if (!headerPath.empty() && bundleDir.empty()) {
+            scanFileForExternGlobals(headerPath);
         }
 
         if (headerPath.empty()) {
@@ -361,6 +503,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         for (const ClassDecl& cls : program.classes) {
             if (cls.name == obj) { alreadyDeclared = true; break; }
         }
+        if (libraryProvidedGlobals.count(obj)) alreadyDeclared = true;
         if (!alreadyDeclared) {
             file << "__" << obj << "__ " << obj << ";\n";
         }

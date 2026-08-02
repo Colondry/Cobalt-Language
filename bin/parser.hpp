@@ -38,14 +38,15 @@ private:
     void recoverStatement();
 
     // ---------- Types (defined in baseutils.cpp) ----------
-    bool isTypeToken(TokenType t) const;
-    std::string typeName(TokenType t);
+    bool isTypeToken(TokenType t, std::string type);
+    std::string typeName(std::string type, TokenType t);
     std::string expectType();
 
     // ---------- Expressions, lowest to highest precedence (baseutils.cpp) ---------
     ExprPtr parseBinaryLevel(const std::function<ExprPtr()>& parseNextLevel,
         const std::function<std::string(TokenType)>& operatorFor);
     ExprPtr parseExpression();     // handles '<<' / '>>' string concatenation
+    ExprPtr parseMacExpression();     // handles ',' string concatenation
     ExprPtr parseLogicalOr();      // ||
     ExprPtr parseLogicalAnd();     // &&
     ExprPtr parseEquality();       // == !=
@@ -58,20 +59,22 @@ private:
     StmtPtr parseAssignAMMS();     // +=, -=, *=, /=
 
     // ---------- Statements (baseutils.cpp) ----------
-    std::vector<StmtPtr> parseBlock();
-    std::vector<StmtPtr> parseCFBlock();
+    std::vector<StmtPtr> parseBlock(std::string retype);
+    std::vector<StmtPtr> parseCFBlock(std::string retype);
     std::vector<StmtPtr> parseSFBlock();
     void parseSBlock(StructCode& str);
     void parseCBlock(ClassDecl& cls);
     StmtPtr parseVarDecl();
     StmtPtr parseAssignOrExprStatement();
-    StmtPtr parseReturn();
+    StmtPtr parseReturn(std::string retype);
     StmtPtr parseIf();
     StmtPtr parseElse();
     StmtPtr parseElif();
     StmtPtr parseWhile();
+    StmtPtr parseRepeat();
+    StmtPtr parseForever();
     StmtPtr parseForRange();
-    StmtPtr parseStatement();
+    StmtPtr parseStatement(std::string retype);
     StmtPtr parseSClass();
     StmtPtr parseSStr();
     StmtPtr parsePrintCode();
@@ -80,10 +83,12 @@ private:
     StmtPtr parseContinue();
     StmtPtr parseBreak();
     StmtPtr parseClear();
+    StmtPtr parsePrintMac();
 
     // ---------- Top level (baseutils.cpp) ----------
     void parseImport(Program& prog);
     FunctionDecl parseFunction();
+    StmtPtr parseLambdaFn(std::string retype);
     StmtPtr parseCFunction();
     ClassDecl parseClasses();
     ClsPublic parsePublic();

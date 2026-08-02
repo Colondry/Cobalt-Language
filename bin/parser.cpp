@@ -35,15 +35,13 @@ Token Parser::expect(TokenType type, const std::string& what) {
         return advance();
     }
     reportError("expected " + what + " but got '" + peek().text + "'");
-    return peek(); // let the caller keep going against the same token
+    return peek(); // let the caller keep going
 }
 
 void Parser::reportError(const std::string& message) {
     const Token& tok = peek();
 
     if (source.empty()) {
-        // No source text available -- fall back to a plain line-only
-        // message rather than doing string ops on an empty source.
         errors.push_back("Syntax Error on line " + std::to_string(tok.line) + ": " + message);
         return;
     }
@@ -58,14 +56,11 @@ void Parser::reportError(const std::string& message) {
     std::string lineText = source.substr(lineStart, lineEnd - lineStart);
     if (!lineText.empty() && lineText.back() == '\r') lineText.pop_back(); // CRLF sources
 
-    int column = static_cast<int>(pos - lineStart) + 1; // 1-based
+    int column = static_cast<int>(pos - lineStart) + 1; 
 
-    // An Invalid token's .text is a diagnostic message (e.g. "unterminated
-    // string literal ..."), not source text -- point at just the one bad
-    // character rather than underlining that whole message.
     size_t caretLen = (tok.type == TokenType::Invalid) ? 1 : tok.text.size();
     caretLen = std::max<size_t>(1, caretLen);
-    // Don't let the caret run past the end of the (possibly short) line.
+   
     size_t maxCaretLen = (static_cast<size_t>(column - 1) < lineText.size())
         ? lineText.size() - (column - 1)
         : 1;
@@ -92,7 +87,7 @@ void Parser::recoverStatement() {
     }
 }
 
-// ---------- Top-level driver ----------
+// ---------- Top-level ----------
 
 Program Parser::parse() {
     program = Program();

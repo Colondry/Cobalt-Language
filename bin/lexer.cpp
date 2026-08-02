@@ -4,7 +4,7 @@
 
 static const std::unordered_map<std::string, TokenType> keywords = {
     // Syntax
-    {"def", TokenType::Fn}, {"ret", TokenType::Ret},
+    {"def", TokenType::Fn}, {"ret", TokenType::Ret}, {"lambda", TokenType::Lambda},
     {"class", TokenType::Class}, {"public", TokenType::Public}, {"private", TokenType::Private},
     {"struct", TokenType::Struct},
     {"if", TokenType::If}, {"elif", TokenType::Elif}, {"else", TokenType::Else},
@@ -12,9 +12,14 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"repeat", TokenType::Repeat}, {"forever", TokenType::Forever},
     {"import", TokenType::Import},
     {"print", TokenType::Print}, {"println", TokenType::PrintLine},
+    {"print!", TokenType::PrintMac}, {"println!", TokenType::PrintMacLn},
     {"read", TokenType::Read}, {"readln", TokenType::ReadLine},
     {"continue", TokenType::Continue}, {"break", TokenType::Break},
     {"clear", TokenType::Clear},
+
+    // Operators
+    {"and", TokenType::AndAnd},
+    {"or", TokenType::OrOr},
 
     // Data Types
     {"List", TokenType::List},
@@ -28,6 +33,11 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"void", TokenType::TypeVoid},
     {"auto", TokenType::TypeAuto},
     {"long", TokenType::TypeLong},
+    {"uint8", TokenType::TypeInt8},
+    {"uint16", TokenType::TypeInt16},
+    {"uint32", TokenType::TypeInt32},
+    {"uint64", TokenType::TypeInt64},
+    {"frac", TokenType::TypeFrac},
 };
 
 std::vector<Token> tokenize(const std::string& src) {
@@ -106,6 +116,19 @@ std::vector<Token> tokenize(const std::string& src) {
                 word += src[i];
                 i++;
             }
+            // "print!" / "println!" are keywords that end in '!', but '!' is
+            // not a valid identifier character, so it's never included in
+            // `word` above. Check for a trailing '!' and fold it in before
+            // doing the keyword lookup.
+            if (i < n && src[i] == '!') {
+                std::string bangWord = word + "!";
+                auto bangIt = keywords.find(bangWord);
+                if (bangIt != keywords.end()) {
+                    i++; // consume '!'
+                    push(bangIt->second, bangWord);
+                    continue;
+                }
+            }
             auto it = keywords.find(word);
             if (it != keywords.end()) push(it->second, word);
             else push(TokenType::Identifier, word);
@@ -153,6 +176,7 @@ std::vector<Token> tokenize(const std::string& src) {
         case '*': push(TokenType::Star, "*"); break;
         case '/': push(TokenType::Slash, "/"); break;
         case '.': push(TokenType::Dot, "."); break;
+        case '!': push(TokenType::Not, "!"); break;
         default:
             push(TokenType::Invalid, std::string(1, c));
             break;

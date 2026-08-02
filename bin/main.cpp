@@ -67,12 +67,12 @@ Program parseAndGenerate(const std::string& inputFile, const std::string& output
     return program;
 }
 
-bool invokeCppCompiler(const Program& program, const std::string& inputFile, const std::string& outputFile, const std::string& optimize, const std::string& extraFlags) {
+bool invokeCppCompiler(const Program& program, const std::string& inputFile, const std::string& outputFile, bool debug, const std::string& optimize, const std::string& extraFlags) {
     std::string outcpp = outputFile + ".cpp";
     fs::path exePath = resolveExePath(inputFile, outputFile);
     std::string inputFileDir = fs::path(inputFile).parent_path().string();
 
-    std::string command = "g++ -o \"" + exePath.string() + "\" " + outcpp + optimize + extraFlags;
+    std::string command = "g++ -o \"" + exePath.string() + "\" " + outcpp + " -w " + optimize + extraFlags;
 
     std::set<std::string> libCpps; // dedupe: multiple imports may share a bundle dir's files
     std::set<std::string> linkFlagsSeen; // dedupe: multiple imports may share a bundle dir's link.txt
@@ -111,7 +111,9 @@ bool invokeCppCompiler(const Program& program, const std::string& inputFile, con
         command += " \"" + cpp + "\"";
     }
     command += extraLinkFlags;
-
+    if (debug) {
+        std::cout << command << "\n";
+    }
     int status = runSystemCommand(command);
     return status == 0;
 }
@@ -120,7 +122,7 @@ void compile(const std::string& inputFile, const std::string& outputFile, bool i
     Program program = parseAndGenerate(inputFile, outputFile, isDeb);
     std::string outcpp = outputFile + ".cpp";
 
-    if (!invokeCppCompiler(program, inputFile, outputFile, optimize, extraFlags)) {
+    if (!invokeCppCompiler(program, inputFile, outputFile, isDeb, optimize, extraFlags)) {
         std::cerr << "Error: g++ failed to build " << outputFile << ".cpp\n";
         std::cerr << "(" << outcpp << " was left in place so you can inspect it.)\n";
         std::exit(EXIT_FAILURE);
@@ -135,7 +137,7 @@ void interpret(const std::string& inputFile, const std::string& outputFile, bool
     Program program = parseAndGenerate(inputFile, outputFile, isDeb);
     std::string outcpp = outputFile + ".cpp";
 
-    if (!invokeCppCompiler(program, inputFile, outputFile, optimize, " -pipe -fuse-ld=bfd -flto ")) {
+    if (!invokeCppCompiler(program, inputFile, outputFile, isDeb, optimize, " -pipe -fuse-ld=bfd -flto ")) {
         std::cerr << "Error: g++ failed to build " << outputFile << ".cpp\n";
         std::cerr << "(" << outcpp << " was left in place so you can inspect it.)\n";
         std::exit(EXIT_FAILURE);
@@ -224,7 +226,7 @@ int main(int argc, char* argv[]) {
             outputFile = argv[++i];
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Alpha v0.4 \"Sapphire\"\n";
+            std::cout << "Cobalt Alpha v0.5 \"Topaz\"";
             return 0;
         }
         else if (cmd == "--help") {
@@ -265,13 +267,6 @@ Options:
         else if (cmd == "-fuse-bfd ") {
             extraFlags += " -fuse-ld=bfd ";
         }
-        else if (cmd == "--changelog") {
-            std::cout <<
-                R"(Cobalt v0.4-Alpha Sapphire Changelog :
-
-        )" << "\n";
-            return 0;
-        }
         else if (cmd == "-flto") {
             extraFlags += " -flto ";
         }
@@ -300,7 +295,7 @@ Options:
         optimizeCode = " -O1  ";
     }
     else {
-        optimizeCode = " -O1 "; // default to no optimization
+        optimizeCode = " -O0 "; // default to no optimization
     }
     if (doRun && extraFlags != "") {
         std::cerr << "Warning: extra flags '" << extraFlags << "' will be ignored in -run mode.\n";

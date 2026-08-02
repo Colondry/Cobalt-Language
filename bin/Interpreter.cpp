@@ -7,11 +7,11 @@
 #include <sstream>
 #include <cstdlib>
 #include <cstdint>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <limits>
 
-static std::vector<std::map<std::string, Value>> scopes{ {} }; // scopes[0] == globals
+static std::vector<std::unordered_map<std::string, Value>> scopes{ {} }; // scopes[0] == globals
 
 static Value& lvalue(const std::string& name) {
     // Search from innermost to outermost scope for an existing binding.
@@ -24,15 +24,15 @@ static Value& lvalue(const std::string& name) {
 }
 
 // Instance fields for class objects
-static std::map<std::string, std::map<std::string, Value>> classInstances;
+static std::unordered_map<std::string, std::unordered_map<std::string, Value>> classInstances;
 
-static std::map<std::string, std::map<std::string, Value>> structInstances;
+static std::unordered_map<std::string, std::unordered_map<std::string, Value>> structInstances;
 
 
 // class name -> (method name -> method AST)
-static std::map<std::string, std::map<std::string, const CFDecl*>> classMethods;
+static std::unordered_map<std::string, std::unordered_map<std::string, const CFDecl*>> classMethods;
 // top-level user functions, by name
-static std::map<std::string, const FunctionDecl*> userFunctions;
+static std::unordered_map<std::string, const FunctionDecl*> userFunctions;
 
 static std::string toString(const Value& v);
 static Value evaluateExpr(const ExprPtr& e);
@@ -95,7 +95,7 @@ static bool isFloatingType(ValueType t) {
 }
 
 static Value callUserFunction(const FunctionDecl* fn, const std::vector<ExprPtr>& argExprs) {
-    std::map<std::string, Value> locals;
+    std::unordered_map<std::string, Value> locals;
     for (size_t i = 0; i < fn->params.size() && i < argExprs.size(); i++) {
         locals[fn->params[i].name] = evaluateExpr(argExprs[i]);
     }
@@ -106,7 +106,7 @@ static Value callUserFunction(const FunctionDecl* fn, const std::vector<ExprPtr>
 }
 
 static Value callMethod(const std::string& objectName, const CFDecl* method, const std::vector<ExprPtr>& argExprs) {
-    std::map<std::string, Value> locals;
+    std::unordered_map<std::string, Value> locals;
     for (size_t i = 0; i < method->params.size() && i < argExprs.size(); i++) {
         locals[method->params[i].name] = evaluateExpr(argExprs[i]);
     }
@@ -256,6 +256,15 @@ static Value evaluateExpr(const ExprPtr& e) {
             v.stringValue += toString(evaluateExpr(lit->items[i]));
         }
         v.stringValue += "]";
+        return v;
+    }
+    if (auto fl = std::dynamic_pointer_cast<FracLit>(e)) {
+        Value v;
+        v.type = ValueType::String;
+        for (size_t i = 0; i < fl->items.size(); i++) {
+            if (i) v.stringValue += "/";
+            v.stringValue += toString(evaluateExpr(fl->items[i]));
+        }
         return v;
     }
     if (auto call = std::dynamic_pointer_cast<CallExpr>(e)) {
@@ -481,7 +490,6 @@ static void setupProgram(Program& program) {
 
     for (auto& str : program.struc) {
         auto& fields = structInstances[str.name];
-        std::cout << "Done struct!\n";
 
         auto registerBody = [&](std::vector<StmtPtr>& body) {
             for (auto& s : body) {
@@ -491,7 +499,6 @@ static void setupProgram(Program& program) {
             }
             };
         registerBody(str.body);
-        std::cout << "Done struct!\n";
     }
 }
 
