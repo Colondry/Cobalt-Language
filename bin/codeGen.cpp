@@ -62,8 +62,15 @@ static std::string emitExpr(const ExprPtr& e) {
     if (auto c = std::dynamic_pointer_cast<CharLit>(e)) return c->value;
     if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return id->name;
     if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) return "(-" + emitExpr(u->operand) + ")";
-    if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e))
+    if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e)) {
+        if (b->op == "+") {
+            // Plain C++ `+` doesn't compile for e.g. int + const char*
+            // (`height + "cm"`) -- __cobalt_add__ picks string-concat vs.
+            // numeric-add automatically based on the actual operand types.
+            return "__cobalt_add__(" + emitExpr(b->lhs) + ", " + emitExpr(b->rhs) + ")";
+        }
         return "(" + emitExpr(b->lhs) + " " + b->op + " " + emitExpr(b->rhs) + ")";
+    }
     if (auto idx = std::dynamic_pointer_cast<IndexExpr>(e))
         return emitExpr(idx->base) + "[" + emitExpr(idx->index) + "]";
     if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return pi->name + "++";
@@ -134,59 +141,27 @@ static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::of
     if (newline) out << " << \"\\n\"";
     out << ";\n";
 }
-// println!("fmt {} string {}", a, b) is parsed as a ConcatExpr whose first
-// piece is the format-string literal and whose remaining pieces are the
-// substitution arguments, one per "{}". std::print/std::format are C++23
-// (not available on the GCC 13 toolchain this compiles with), so instead we
-// split the format string on "{}" and weave the pieces together with
-// std::cout <<, the same way emitPrintStmt already works.
+// println!("fmt {} {}", a, b) is parsed as a ConcatExpr whose first piece
+// is the format-string literal and whose remaining pieces are the
+// substitution arguments. std::print/std::println (<print>, C++23) are
+// real functions that take the format string as their first argument and
+// do their own {} substitution -- they don't have an operator<<, so this
+// forwards the format string and args straight through as call arguments:
+//   std::println("Name = {}\nAge = {}", Info.name, Info.age);
 static void emitPrintMacStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
-    out << indent(depth) << "std::cout";
-
+    out << indent(depth) << (newline ? "std::println(" : "std::print(");
     if (value) {
-        auto c = std::dynamic_pointer_cast<ConcatExpr>(value);
-        std::shared_ptr<StringLit> fmt = c && !c->pieces.empty()
-            ? std::dynamic_pointer_cast<StringLit>(c->pieces[0])
-            : std::dynamic_pointer_cast<StringLit>(value);
-
-        if (fmt) {
-            // fmt->value includes the surrounding quotes; strip them so we
-            // can scan the raw characters for "{}" placeholders.
-            std::string raw = fmt->value;
-            if (raw.size() >= 2) raw = raw.substr(1, raw.size() - 2);
-
-            const std::vector<ExprPtr> args = c ? std::vector<ExprPtr>(c->pieces.begin() + 1, c->pieces.end()) : std::vector<ExprPtr>{};
-            size_t argIdx = 0;
-            std::string literalChunk;
-
-            auto flushLiteral = [&]() {
-                out << " << \"" << literalChunk << "\"";
-                literalChunk.clear();
-                };
-
-            for (size_t i = 0; i < raw.size(); i++) {
-                if (raw[i] == '{' && i + 1 < raw.size() && raw[i + 1] == '}') {
-                    flushLiteral();
-                    if (argIdx < args.size()) {
-                        out << " << " << emitExpr(args[argIdx++]);
-                    }
-                    i++; // skip the '}'
-                }
-                else {
-                    literalChunk += raw[i];
-                }
+        if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value); c && !c->pieces.empty()) {
+            out << emitExpr(c->pieces[0]);
+            for (size_t i = 1; i < c->pieces.size(); i++) {
+                out << ", " << emitExpr(c->pieces[i]);
             }
-            if (!literalChunk.empty()) flushLiteral();
-        }
-        else if (c) {
-            out << " << " << emitConcatPieces(c);
         }
         else {
-            out << " << " << emitExpr(value);
+            out << emitExpr(value);
         }
     }
-    if (newline) out << " << \"\\n\"";
-    out << ";\n";
+    out << ");\n";
 }
 
 static void emitContinueStmt(int depth, std::ofstream& out) {
@@ -261,16 +236,20 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         if (in->prompt) {
             out << indent(depth) << "std::cout << " << emitExpr(in->prompt) << ";\n";
         }
-        out << indent(depth) << "std::cin >> " << in->varName << ";\n";
+        out << indent(depth) << "std::cin >> " << emitExpr(in->target) << ";\n";
         return;
     }
     if (auto inStr = std::dynamic_pointer_cast<ReadLine>(stmt)) {
         if (inStr->prompt) {
             out << indent(depth) << "std::cout << " << emitExpr(inStr->prompt) << ";\n";
         }
-        out << indent(depth) << "std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\\n');\n";
-        out << indent(depth) << "std::getline(std::cin, " << inStr->varName << ", " << (inStr->limit.empty() ? "std::numeric_limits<std::streamsize>::max()" :
-            "" + inStr->limit + "") << ");\n";
+        if (inStr->limit.empty()) {
+            out << indent(depth) << "__cobalt_readln__(" << emitExpr(inStr->target) << ");\n";
+        }
+        else {
+            // A char limit/delimiter only makes sense reading into text.
+            out << indent(depth) << "std::getline(std::cin, " << emitExpr(inStr->target) << ", " << inStr->limit << ");\n";
+        }
         return;
     }
     if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmt)) {
@@ -381,11 +360,47 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     }
 
     file << "#include <iostream>\n";
+    file << "#include <print>\n";
     file << "#include <string>\n";
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
     file << "#include <limits>\n";
     file << "#include <utility>\n";
+    file << "#include <sstream>\n";
+    file << "#include <type_traits>\n";
+    file << "\n";
+    file << "// `+` in Cobalt doubles as both numeric addition and string\n";
+    file << "// concatenation (`height + \"cm\"`) -- plain C++ `+` doesn't compile for\n";
+    file << "// e.g. int + const char*, so this picks string-concat vs. numeric-add\n";
+    file << "// based on the actual operand types.\n";
+    file << "template<typename __L__, typename __R__>\n";
+    file << "auto __cobalt_add__(const __L__& l, const __R__& r) {\n";
+    file << "    if constexpr (std::is_convertible_v<std::decay_t<__L__>, std::string> ||\n";
+    file << "                  std::is_convertible_v<std::decay_t<__R__>, std::string>) {\n";
+    file << "        std::ostringstream __oss__;\n";
+    file << "        __oss__ << l << r;\n";
+    file << "        return __oss__.str();\n";
+    file << "    }\n";
+    file << "    else {\n";
+    file << "        return l + r;\n";
+    file << "    }\n";
+    file << "}\n";
+    file << "\n";
+    file << "// readln(...) reads a whole line (unlike read(...), which stops at the\n";
+    file << "// first whitespace) -- but the target isn't always a std::string (e.g.\n";
+    file << "// `readln(Info.age)` where age is int). std::getline only accepts a\n";
+    file << "// std::string, so this reads the line as text once and then converts it\n";
+    file << "// to whatever the target's real type is.\n";
+    file << "template<typename __T__>\n";
+    file << "void __cobalt_readln__(__T__& target) {\n";
+    file << "    std::string __line__;\n";
+    file << "    std::getline(std::cin, __line__);\n";
+    file << "    std::istringstream __iss__(__line__);\n";
+    file << "    __iss__ >> target;\n";
+    file << "}\n";
+    file << "inline void __cobalt_readln__(std::string& target) {\n";
+    file << "    std::getline(std::cin, target);\n";
+    file << "}\n";
     file << "\n";
     file << "// Backing type for Cobalt's frac<T> / frac<T1,T2> -- a simple\n";
     file << "// numerator/denominator pair that prints as \"num/denom\", and\n";

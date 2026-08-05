@@ -64,9 +64,6 @@ struct MethodCallExpr : Expr
 };
 
 class AssignStmt : public Stmt { public: std::string name; ExprPtr value; };
-// Assignment to a general lvalue expression -- e.g. `Chart.Color = "#FFF"`
-// (MemberExpr) or `list[i] = x` (IndexExpr). AssignStmt above only covers
-// a bare `name = value`.
 class ExprAssignStmt : public Stmt { public: ExprPtr target; ExprPtr value; };
 class ReturnStmt : public Stmt { public: ExprPtr value; }; // value may be null
 class ExprStmt : public Stmt { public: ExprPtr expr; };
@@ -74,8 +71,8 @@ class ExprStmt : public Stmt { public: ExprPtr expr; };
 class PrintCode : public Stmt { public: bool newline = false; ExprPtr value; int toRight = 1; };
 class PrintMacCode : public Stmt { public: bool newline = false; ExprPtr value; };
 
-class ReadCode : public Stmt { public: ExprPtr prompt; std::string varName; };
-class ReadLine : public Stmt { public: ExprPtr prompt; std::string varName; std::string limit; };
+class ReadCode : public Stmt { public: ExprPtr prompt; ExprPtr target; };
+class ReadLine : public Stmt { public: ExprPtr prompt; ExprPtr target; std::string limit; };
 
 class BreakStmt : public Stmt {};
 class ContinueStmt : public Stmt {};

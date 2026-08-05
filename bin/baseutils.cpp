@@ -643,15 +643,14 @@ StmtPtr Parser::parseReadCode() {
     ExprPtr firstOperand = parseLogicalOr();
 
     if (check(TokenType::Shr)) {
-        // input("prompt" >> var)
+        // input("prompt" >> var), var can be `x` or a member path like `Info.name`
         advance(); // '>>'
         stmt->prompt = firstOperand;
-        Token nameTok = expect(TokenType::Identifier, "variable name after '>>'");
-        stmt->varName = nameTok.text;
+        stmt->target = parsePostfix();
     }
-    else if (auto name = std::dynamic_pointer_cast<NameExpr>(firstOperand)) {
-        // input(var
-        stmt->varName = name->name;
+    else if (std::dynamic_pointer_cast<NameExpr>(firstOperand) || std::dynamic_pointer_cast<MemberExpr>(firstOperand)) {
+        // input(var) or input(Info.name)
+        stmt->target = firstOperand;
     }
     else {
         reportError("expected a variable name inside input(...), like input(x) or input(\"prompt\" >> x)");
@@ -673,15 +672,14 @@ StmtPtr Parser::parseReadLineCode() {
     ExprPtr firstOperand = parseLogicalOr();
 
     if (check(TokenType::Shr)) {
-        // inputstr("prompt" >> var)
+        // inputstr("prompt" >> var), var can be `x` or a member path like `Info.name`
         advance(); // '>>'
         stmt->prompt = firstOperand; // any expression is fine as a prompt, not just string literals
-        Token nameTok = expect(TokenType::Identifier, "variable name after '>>'");
-        stmt->varName = nameTok.text;
+        stmt->target = parsePostfix();
     }
-    else if (auto name = std::dynamic_pointer_cast<NameExpr>(firstOperand)) {
-        // inputstr(var
-        stmt->varName = name->name;
+    else if (std::dynamic_pointer_cast<NameExpr>(firstOperand) || std::dynamic_pointer_cast<MemberExpr>(firstOperand)) {
+        // inputstr(var) or inputstr(Info.name)
+        stmt->target = firstOperand;
     }
     else {
         reportError("expected a variable name inside inputstr(...), like inputstr(x) or inputstr(\"prompt\" >> x)");
