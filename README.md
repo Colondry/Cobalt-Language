@@ -2,7 +2,7 @@
 
 **Cobalt** is a modern, compiled programming language that transpiles to **C++**, combining simplicity with performance. It is designed to be easy to learn, flexible to use, and capable of producing fast native applications.
 
-> ⚠️ **Current Status:** Alpha (v0.4)
+> ⚠️ **Current Status:** Alpha (v0.5)
 > Cobalt is under active development. Features, syntax, and APIs may change between releases.
 
 ## ✨ Features
@@ -14,7 +14,7 @@
 ## Example
 
 ```cobalt
-fn main() {
+def main() {
     println("Hello, World!")
     ret 0
 }
