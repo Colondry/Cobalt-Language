@@ -7,6 +7,7 @@
 #include "flib.hpp"
 #include "codeGen.hpp"
 #include "Interpreter.hpp"
+#include "libmanage.hpp"
 
 namespace fs = std::filesystem;
 
@@ -191,6 +192,25 @@ int main(int argc, char* argv[]) {
             if (cmd == "-build") doBuild = true;
             else doRun = true;
         }
+        else if (cmd == "-install") {
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << " requires a library argument.\n";
+                return 1;
+            }
+            std::string lib = argv[++i];
+            if (fs::exists("./lib/" + lib + "/") && fs::is_directory("./lib/" + lib + "/")) {
+                std::cout << lib + " is already exist.\n"; return true;
+            }
+
+            if (installPackage(lib)) {
+                std::cout << lib << " successfully installed.\n";
+            }
+            else {
+                std::cerr << "Error: failed to install \"" << lib << "\" (not found in Cobalt-Package, a dependency failed, or no network access).\n";
+                return 1;
+            }
+            return 0;
+        }
         else if (cmd == "-run-experimental") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: " << cmd << " requires a file argument.\n";
@@ -227,7 +247,7 @@ int main(int argc, char* argv[]) {
             outputFile = argv[++i];
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Alpha v0.4 \"Sapphire\"";
+            std::cout << "Cobalt Beta v0.6.0 \"Onyx\"";
             return 0;
         }
         else if (cmd == "--help") {
