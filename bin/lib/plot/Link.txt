@@ -1,1 +1,0 @@
--I"./lib/plot/Python314/Include" -I"./lib/plot/Python314/include/numpy/_core/include" -L"./lib/plot/Python314/libs" -lpython314

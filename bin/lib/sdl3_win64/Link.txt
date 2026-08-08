@@ -1,1 +1,0 @@
--I"lib/sdl3_win64/SDL3-devel/x86_64-w64-mingw32/include" -L"lib/sdl3_win64/SDL3-devel/x86_64-w64-mingw32/lib" -lSDL3
