@@ -86,3 +86,35 @@ void __System__::clearLines(int lines) {
     // Flush the buffer to apply changes immediately
     std::cout << std::flush;
 }
+
+#include <cstdlib>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    void* System_Malloc(size_t size) {
+        return std::malloc(size);
+    }
+
+    void* System_Realloc(void* ptr, size_t new_size) {
+        return std::realloc(ptr, new_size);
+    }
+
+    void System_Free(void* ptr) {
+        std::free(ptr);
+    }
+
+#ifdef __cplusplus
+}
+#endif
+
+void* __System__::Malloc(size_t size) {
+    return System_Malloc(size);
+}
+void* __System__::ReAlloc(void* ptr, size_t size) {
+    return System_Realloc(ptr, size);
+}
+void __System__::Free(void* ptr) {
+    System_Free(ptr);
+}
