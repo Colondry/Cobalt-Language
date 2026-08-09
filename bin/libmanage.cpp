@@ -360,7 +360,7 @@ bool extract(const std::string& archiveFileName,
     // Find the directory containing cobalt.exe
     fs::path cobaltDir = fs::current_path();
 
-    fs::path sevenZip = cobaltDir / "lib" / "7-Zip" / "7z.exe";
+    fs::path sevenZip = cobaltDir / "Bin" / "7-Zip" / "7z.exe";
     fs::path archive = fs::path(archiveFileName);
     fs::path output = fs::path(outputDir);
 

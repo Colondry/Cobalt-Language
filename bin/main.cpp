@@ -2,6 +2,9 @@
 #include <cstdio>
 #include <filesystem>
 #include <set>
+#include <algorithm>
+#include <cctype>
+#include <nlohmann/json.hpp>
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "flib.hpp"
@@ -165,6 +168,47 @@ void InterpretExperimental(const std::string& inputFile, const std::string& outp
     Interpreter(program);
 }
 
+#include <fstream>
+using json = nlohmann::json;
+std::string ReadJSON(std::string libName) {
+    std::ifstream f("./lib/" + libName + "/config.json");
+    if (!f.is_open()) return "  Name : " + libName + ".\n  Version : Unknown.\n";
+
+    json data = json::parse(f);
+
+    std::string version = data["version"];
+    std::string name = data["name"];
+
+    std::string rv = "  Name : " + name + ".\n  Version : " + version + ".\n";
+    return rv;
+}
+
+void listsLib() {
+    // Set your target directory path
+    std::string target_path = "./lib";
+
+    // Check if path exists
+    if (!fs::exists(target_path)) {
+        std::cout << "Directory does not exist.\n";
+        fs::create_directories("./lib");
+    }
+    std::cout << "Library Lists :\n";
+
+    // Loop through the directory
+    for (const auto& entry : fs::directory_iterator(target_path)) {
+
+        // Check if the entry is a folder
+        if (fs::is_directory(entry.status())) {
+            auto old_path = entry.path();
+            std::string name = old_path.filename().string();
+            std::string out = ReadJSON(name);
+
+            std::cout << out
+                      << "---------------------------\n";
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     setExecutablePath(argv[0]);
 
@@ -183,26 +227,108 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         std::string cmd = argv[i];
 
-        if (cmd == "-build" || cmd == "-run") {
+        if (cmd == "build" || cmd == "run") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: " << cmd << " requires a file argument.\n";
                 return 1;
             }
             inputFile = argv[++i];
-            if (cmd == "-build") doBuild = true;
+            if (cmd == "build") doBuild = true;
             else doRun = true;
         }
-        else if (cmd == "-install") {
+        else if (cmd == "lists") {
+            listsLib();
+            return 0;
+        }
+        else if (cmd == "remove") {
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << " requires a library argument.\n";
+                return 1;
+            }
+            std::string lib = argv[i++];
+            if (lib == "remove") {
+                lib = argv[i++];
+            }
+            if (!fs::exists("./lib/" + lib + "/")) {
+                std::cout << lib << "is not exist on library lists.\n";
+                return 0;
+            }
+            else {
+                std::string command = "rmdir /s /q \"./lib/" + lib + "\"";
+                std::cout << command << "\n";
+                int status = std::system(command.c_str());
+
+                if (status == 1) {
+                    std::cerr << "remove operation was unsuccessful.\n";
+                    return 1;
+                }
+                else {
+                    std::cout << "remove operation was successful\n";
+                    return 0;
+                }
+            }
+        }
+        else if (cmd == "check") {
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << " requires a library argument.\n";
+                return 1;
+            }
+            std::string lib = argv[i++];
+            if (lib == "check") {
+                lib = argv[i++];
+            }
+            if (!fs::exists("./lib")) {
+                fs::create_directories("./lib");
+            }
+            if (fs::exists("./lib/" + lib + "/") && fs::is_directory("./lib/" + lib + "/")) {
+                std::cout << lib + " library do exists.\n";
+                return 0;
+            }
+            std::string input;
+            std::cout << lib << " library is not found.\nDo you want to install them? (yes or no): \n";
+            std::cin >> input;
+            std::transform(input.begin(), input.end(), input.begin(), [](unsigned char c) {
+                return std::tolower(c);
+                });
+            if (input == "yes") {
+                if (installPackage(lib)) {
+                    if (fs::exists("./lib/" + lib + "/") && fs::is_directory("./lib/" + lib + "/")) {
+                        return 0;
+                    }
+                    std::cout << lib << " successfully installed.\n";
+                }
+                else {
+                    std::cerr << "Error: failed to install \"" << lib << "\" (not found in Cobalt-Package, a dependency failed, or no network access).\n";
+                    return 1;
+                }
+            }
+            else if (input == "y") {
+                if (installPackage(lib)) {
+                    std::cout << lib << " successfully installed.\n";
+                }
+                else {
+                    std::cerr << "Error: failed to install \"" << lib << "\" (not found in Cobalt-Package, a dependency failed, or no network access).\n";
+                    return 1;
+                }
+            }
+            else {
+                return 0;
+            }
+        }
+        else if (cmd == "install") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: " << cmd << " requires a library argument.\n";
                 return 1;
             }
             std::string lib = argv[++i];
-            if (fs::exists("./lib/" + lib + "/") && fs::is_directory("./lib/" + lib + "/")) {
-                std::cout << lib + " is already exist.\n"; return true;
+            if (!fs::exists("./lib")) {
+                fs::create_directories("./lib");
             }
 
             if (installPackage(lib)) {
+                if (fs::exists("./lib/" + lib + "/") && fs::is_directory("./lib/" + lib + "/")) {
+                    return 0;
+                }
                 std::cout << lib << " successfully installed.\n";
             }
             else {
@@ -211,7 +337,7 @@ int main(int argc, char* argv[]) {
             }
             return 0;
         }
-        else if (cmd == "-run-experimental") {
+        else if (cmd == "run-fast") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: " << cmd << " requires a file argument.\n";
                 return 1;
@@ -227,19 +353,19 @@ int main(int argc, char* argv[]) {
         else if (cmd == "-cpp") {
             remcpp = false;
         }
-        else if (cmd == "-optimize-lvl-0") {
+        else if (cmd == "-O0") {
             optimizeCode = " -O0 "; // no optimization
         }
-        else if (cmd == "-optimize-lvl-1") {
+        else if (cmd == "-O1") {
             isOptimizel1 = true;
         }
-        else if (cmd == "-optimize-lvl-2") {
+        else if (cmd == "-O2") {
             isOptimizel2 = true;
         }
-        else if (cmd == "-optimize-lvl-3" || cmd == "-optimize-performance") {
+        else if (cmd == "-O3" || cmd == "-OPerformance") {
             isOptimizeFast = true;
         }
-        else if (cmd == "-name") {
+        else if (cmd == "as") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: -name requires an argument.\n";
                 return 1;
@@ -247,10 +373,10 @@ int main(int argc, char* argv[]) {
             outputFile = argv[++i];
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Beta v0.6.0 \"Onyx\"";
+            std::cout << "Cobalt Beta v0.6.1 \"Onyx\"";
             return 0;
         }
-        else if (cmd == "--help") {
+        else if (cmd == "--help" || cmd == "help") {
             std::cout <<
                 R"(Cobalt Compiler
 
@@ -261,23 +387,23 @@ Usage:
     cobalt --help
 
 Options:
-    -build                  Compile file only
-    -run                    Compile and immediately run the result
-    -name                   Output executable name (default: out)
-    -debug                  Print parsed imports/functions before generating code
-    -run-experimental       Run the interpreter directly (experimental)
-    -optimize-lvl-0         No optimization (default)
-    -optimize-lvl-1         Basic optimization
-    -optimize-lvl-2         More optimization
-    -optimize-lvl-3         Aggressive optimization (may break some code)
-    -optimize-performance   Same as -optimize-lvl-3
-    -pipe                   Use pipe for linking (may speed up linking)
-    -fuse-bfd               Use BFD linker instead of default (may speed up linking)
-    -flto                   Enable link-time optimization (may speed up linking)
-    -cpp                    Keep the generated .cpp instead of deleting it
+    build                  Compile file only
+    run                    Compile and immediately run the result
+    -as                    Output executable name (default: out)
+    -debug                 Print parsed imports/functions before generating code
+    -run-fast              Run the interpreter directly (experimental)
+    -OX                    No optimization (default)
+    -O1                    Basic optimization
+    -O2                    More optimization
+    -O3                    Aggressive optimization (may break some code)
+    -OPerformance          Same as -optimize-lvl-3
+    -pipe                  Use pipe for linking (may speed up linking)
+    -fuse-bfd              Use BFD linker instead of default (may speed up linking)
+    -flto                  Enable link-time optimization (may speed up linking)
+    -cpp                   Keep the generated .cpp instead of deleting it
     
-    --version               Show version
-    --help                  Show this help
+    version                Show version
+    help                   Show this help
     
         )" << "\n";
             return 0;
