@@ -14,7 +14,7 @@ applications, databases, and general-purpose programming**.
 
 ## ⚠️ Project Status
 
-**Current version: Cobalt Alpha v0.5**
+**Current version: Cobalt Alpha v0.6.x**
 
 Cobalt is still in active development.
 
