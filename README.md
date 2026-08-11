@@ -59,79 +59,36 @@ simplicity of high-level languages and the performance and control of
 native languages.
 
 ---
-
-## 🎯 Current Direction
-
-Cobalt's development is currently centered around three major areas.
-
-### 🖥️ Server Programming
-
-Cobalt is being designed with server applications in mind.
-
-Future server-oriented functionality is expected to include:
-
-- HTTP servers
-- TCP/UDP networking
-- Client/server communication
-- Concurrent connections
-- Request handling
-- Server utilities
-- Configuration handling
-- Logging
-- Authentication-related libraries
-- Database connectivity
-
-The goal is to make writing a Cobalt server straightforward without requiring
-large amounts of boilerplate.
-
+# Command Basics
+## **How to build/compile a file into a .exe file**
+```text
+cobalt build testfile.cb
+```
 ---
-
-### 🗄️ Database Programming
-
-Database support is another major direction for Cobalt.
-
-The long-term goal is to make database applications a natural use case for
-the language.
-
-Planned and experimental areas include:
-
-- SQL database connectivity
-- MySQL support
-- PostgreSQL support
-- SQLite support
-- Connection management
-- Queries
-- Prepared statements
-- Transactions
-- Result handling
-- Database utilities
-- Cobalt package-based database libraries
-
-This is especially important for Cobalt's server-side ecosystem, where
-database access is often a fundamental part of an application.
-
+## **How to run a file**
+```text
+cobalt run testfile.cb
+```
 ---
-
-### 🧰 General-Purpose Programming
-
-After the server and database foundations become mature, Cobalt will expand
-toward broader general-purpose programming.
-
-Possible areas include:
-
-- Command-line applications
-- Desktop utilities
-- File processing
-- Networking tools
-- Automation
-- Data processing
-- System utilities
-- Application development
-- Native library integration
-
-The long-term goal is for Cobalt to be useful beyond a single niche while
-maintaining its server and database strengths.
-
+## **How to install a library**
+```text
+cobalt install library_name
+```
+---
+## **How to remove a library**
+```text
+cobalt remove libary_name
+```
+---
+## **How to lists all library available in library path**
+```text
+cobalt lists
+```
+---
+## **How to run a .cb file using an experimental interpreter**
+```text
+cobalt run-fast testfile.cb
+```
 ---
 
 ## 🚀 Key Features
