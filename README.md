@@ -90,6 +90,30 @@ cobalt lists
 cobalt run-fast testfile.cb
 ```
 ---
+## **Code Example**
+### Class 
+```text
+class UserList {
+    private {
+        # Variable Declarations
+        str name
+        int age
+    }
+    public {
+        def getName(): str { ret name }
+    }
+}
+```
+### Write Text
+```text
+def main(): int {
+    print("Hello, ")
+    println("World!")
+
+    ret 0;
+}
+```
+---
 
 ## 🚀 Key Features
 
