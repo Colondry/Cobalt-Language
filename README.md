@@ -52,12 +52,6 @@ The goal gradually evolved into building a language that is:
 - Suitable for database applications
 - Flexible enough for general-purpose programming
 
-Cobalt does not try to replace every programming language.
-
-Instead, it aims to provide a comfortable middle ground between the
-simplicity of high-level languages and the performance and control of
-native languages.
-
 ---
 # Command Basics
 ## **How to build/compile a file into a .exe file**
@@ -109,6 +103,43 @@ class UserList {
 def main(): int {
     print("Hello, ")
     println("World!")
+
+    ret 0;
+}
+```
+### Variable Declaration
+```text
+def main(): int {
+    # variable cannot be NULL
+    int age = 10
+    println("Hello, ")
+
+    ret 0;
+}
+```
+### Repeat
+```text
+def main(): int {
+    int h = 0
+    repeat 20 {
+        h++
+        println(h)
+    }
+
+    ret 0;
+}
+```
+### Forever Loop
+```text
+def main(): int {
+    int h = 0
+    forever {
+        println(h)
+        if h >= 10 {
+            break
+        }
+        h++
+    }
 
     ret 0;
 }
