@@ -54,32 +54,37 @@ The goal gradually evolved into building a language that is:
 
 ---
 # Command Basics
-## **How to build/compile a file into a .exe file**
+### **How to build/compile a file into a .exe file**
 ```text
-cobalt build testfile.cb
+cobalt build testfile.cb -as testfile
 ```
 ---
-## **How to run a file**
+### **How to run a file**
 ```text
 cobalt run testfile.cb
 ```
 ---
-## **How to install a library**
+### **How to run/build a .cb file with optimized version**
+```text
+cobalt run testfile.cb -0Performance
+```
+---
+### **How to install a library**
 ```text
 cobalt install library_name
 ```
 ---
-## **How to remove a library**
+### **How to remove a library**
 ```text
 cobalt remove libary_name
 ```
 ---
-## **How to lists all library available in library path**
+### **How to lists all library available in library path**
 ```text
 cobalt lists
 ```
 ---
-## **How to run a .cb file using an experimental interpreter**
+### **How to run a .cb file using an experimental interpreter**
 ```text
 cobalt run-fast testfile.cb
 ```
