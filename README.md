@@ -14,7 +14,7 @@ applications, databases, and general-purpose programming**.
 
 ## ⚠️ Project Status
 
-**Current version: Cobalt Alpha v0.6.x**
+**Current version: Cobalt Alpha v0.7.x**
 
 Cobalt is still in active development.
 
@@ -103,6 +103,22 @@ class UserList {
     }
 }
 ```
+### Module
+```text
+module UserList {
+    str Name = ""
+    int age = 0
+}
+```
+### Module Call
+```text
+module UserList { str Name = ""; int age = 0 }
+def main(): int {
+    readln("Name?" >> UserList^Name, "")
+    println(UserList^Name)
+    ret 0
+}
+```
 ### Write Text
 ```text
 def main(): int {
@@ -150,10 +166,6 @@ def main(): int {
 }
 ```
 ---
-
-## 🚀 Key Features
-
-### Native C++ Backend
 
 Cobalt programs are translated into C++ and compiled into native executables.
 
