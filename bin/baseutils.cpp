@@ -17,7 +17,8 @@ bool Parser::isTypeToken(TokenType t, std::string type) {
         t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
         t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto
         || t == TokenType::TypeInt8 || t == TokenType::TypeInt16 || t == TokenType::TypeInt32
-        || t == TokenType::TypeInt64 || t == TokenType::TypeFrac;
+        || t == TokenType::TypeInt64 || t == TokenType::TypeFrac
+        || t == TokenType::TypeLong || t == TokenType::TypeLonger;
 }
 
 std::string Parser::typeName(std::string type, TokenType t) {
@@ -31,7 +32,8 @@ std::string Parser::typeName(std::string type, TokenType t) {
     case TokenType::TypeBool: return "bool";
     case TokenType::TypeVoid: return "void";
     case TokenType::TypeAuto: return "auto";
-    case TokenType::TypeLong: return "long double";
+    case TokenType::TypeLonger: return "long double";
+    case TokenType::TypeLong: return "long long";
     case TokenType::TypeInt8: return "std::uint8_t";
     case TokenType::TypeInt16: return "std::uint16_t";
     case TokenType::TypeInt32: return "std::uint32_t";
@@ -273,6 +275,28 @@ ExprPtr Parser::parsePostfix() {
                 expr = m;
             }
         }
+        else if (match(TokenType::Arrow_Up)) {
+            Token member = expect(TokenType::Identifier, "member name after '^'");
+            auto call = std::make_shared<NamespaceCallExpr>();
+            if (match(TokenType::LParen)) {
+                call->object = expr; // the object on which the method is called
+                call->method = member.text; // the method name
+                if (!check(TokenType::RParen)) {
+                    do {
+                        call->args.push_back(parseExpression());
+                    } while (match(TokenType::Comma));
+                }
+                expect(TokenType::RParen, ")");
+                expr = call;
+            }
+            else {
+                auto m = std::make_shared<MethodMemberExpr>();
+                m->object = expr;
+                m->member = member.text;
+                expr = m;
+            }
+            
+        }
         else {
             break;
         }
@@ -499,6 +523,16 @@ StmtPtr Parser::parseAssignOrExprStatement() {
             advance();
         }
         return stmt;
+    } else if ((std::dynamic_pointer_cast<MethodMemberExpr>(expr) || std::dynamic_pointer_cast<IndexExpr>(expr))
+        && check(TokenType::Assign)) {
+        advance(); // '='
+        auto stmt = std::make_shared<ExprAssignStmt>();
+        stmt->target = expr;
+        stmt->value = parseExpression();
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
+        return nullptr;
     }
 
     if (check(TokenType::Semicolon)) {
@@ -950,6 +984,27 @@ void Parser::parseCBlock(ClassDecl& cls) {
     }
 }
 
+void Parser::parseModuleBlock(ModuleDecl& mod) {
+    expect(TokenType::LBrace, "{");
+    while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
+        StmtPtr s = parseSClass();
+        if (s) mod.body.push_back(s);
+        else {
+            reportError("unexpected token '" + peek().text + "' in module block");
+            recoverStatement();
+        }
+    }
+    if (check(TokenType::SClose)) {
+        advance(); // "};"
+    }
+    else {
+        expect(TokenType::RBrace, "}");
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
+    }
+}
+
 void Parser::parseSBlock(StructCode& str) {
     expect(TokenType::LBrace, "{");
     while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
@@ -1031,4 +1086,47 @@ StructCode Parser::parseStruct() {
     parseSBlock(str);
 
     return str;
+}
+
+Use Parser::parseUse() {
+    advance(); // 'use'
+    Use use;
+    if (match(TokenType::Module)) {
+        use.mode = 1;
+    } else if (match(TokenType::Class)) {
+        use.mode = 0;
+    } else {
+        reportError("expected 'module' or 'class' after 'use'");
+    }
+    Token nameTok = expect(TokenType::Identifier, "module name");
+    expect(TokenType::UseAs, "as");
+    Token usedName = expect(TokenType::Identifier, "used name");
+    use.first = nameTok.text;
+    use.second = usedName.text;
+    return use;
+}
+
+AutoUse Parser::parseAutoUse() {
+    advance(); // 'autouse'
+    AutoUse autouse;
+    if (match(TokenType::Module)) {
+        autouse.mode = 1;
+    } else if (match(TokenType::Class)) {
+        autouse.mode = 0;
+    } else {
+        reportError("expected 'module' or 'class' after 'autouse'");
+    }
+    Token libName = expect(TokenType::Identifier, "library name");
+    autouse.libName = libName.text;
+    return autouse;
+}
+
+ModuleDecl Parser::parseModule() {
+    advance(); // 'module'
+    Token nameTok = expect(TokenType::Identifier, "module name");
+    ModuleDecl mod;
+    parseModuleBlock(mod);
+    mod.name = nameTok.text;
+
+    return mod;
 }

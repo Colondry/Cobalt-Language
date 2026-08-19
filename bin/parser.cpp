@@ -109,6 +109,15 @@ Program Parser::parse() {
         else if (check(TokenType::Struct)) {
             program.struc.push_back(parseStruct());
         }
+        else if (check(TokenType::Use)) {
+            program.uses.push_back(parseUse());
+        }
+        else if (check(TokenType::AutoUse)) {
+            program.autouses.push_back(parseAutoUse());
+        }
+        else if (check(TokenType::Module)) {
+            program.modules.push_back(parseModule());
+        }
         else {
             reportError("unexpected top-level token '" + peek().text + "'");
             recoverStatement();

@@ -64,6 +64,7 @@ private:
     std::vector<StmtPtr> parseSFBlock();
     void parseSBlock(StructCode& str);
     void parseCBlock(ClassDecl& cls);
+    void parseModuleBlock(ModuleDecl& mod);
     StmtPtr parseVarDecl();
     StmtPtr parseAssignOrExprStatement();
     StmtPtr parseReturn(std::string retype);
@@ -94,6 +95,9 @@ private:
     ClsPublic parsePublic();
     ClsPrivate parsePrivate();
     StructCode parseStruct();
+    Use parseUse();
+    AutoUse parseAutoUse();
+    ModuleDecl parseModule();
 };
 
 #endif

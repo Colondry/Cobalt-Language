@@ -4,6 +4,7 @@
 #include <set>
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include "lexer.hpp"
 #include "parser.hpp"
@@ -66,8 +67,12 @@ Program parseAndGenerate(const std::string& inputFile, const std::string& output
         }
         std::cout << "\n\nOutput:\n";
     }
-
-    codeGen(program, outputFile, fs::path(inputFile).parent_path().string());
+    std::string outFile = outputFile.empty() ? fs::path(inputFile).stem().string() : outputFile;
+    size_t exePos = outFile.find(".exe");
+    if (exePos != std::string::npos) {
+        outFile.erase(exePos, 4);
+    }
+    codeGen(program, outFile, fs::path(inputFile).parent_path().string());
     return program;
 }
 
@@ -76,7 +81,7 @@ bool invokeCppCompiler(const Program& program, const std::string& inputFile, con
     fs::path exePath = resolveExePath(inputFile, outputFile);
     std::string inputFileDir = fs::path(inputFile).parent_path().string();
 
-    std::string command = "g++ -std=c++23 -o \"" + exePath.string() + "\" " + outcpp + " -w " + optimize + extraFlags;
+    std::string command = "g++ -std=c++23 -o \"" + exePath.string() + "\" " + outcpp + " -w -I\"./Bin\" " + optimize + extraFlags;
 
     std::set<std::string> libCpps; // dedupe: multiple imports may share a bundle dir's files
     std::set<std::string> linkFlagsSeen; // dedupe: multiple imports may share a bundle dir's link.txt
@@ -135,6 +140,49 @@ void compile(const std::string& inputFile, const std::string& outputFile, bool i
 
     if (isRemCPP) {
         std::remove(outcpp.c_str());
+    }
+}
+void noCompile(const std::string& inputFile, const std::string& outputFile, bool isDeb, bool nfile, bool genASM, const std::string& optimize, const std::string& extraFlags) {
+    fs::path inputP(inputFile);
+    fs::path parentDir = inputP.has_parent_path() ? inputP.parent_path() : fs::current_path();
+    fs::path targetPath = parentDir / outputFile;
+
+    parseAndGenerate(inputFile, targetPath.string(), isDeb);
+    if (genASM && !nfile) {
+        std::string outcpp = targetPath.string() + ".cpp";
+        std::string asmFile = targetPath.string() + ".asm";
+        std::string command = "g++ -std=c++23 -S -o \"" + asmFile + "\" " + outcpp + " -w -I\"./Bin\" " + optimize + extraFlags;
+        std::cout << command << "\n";
+        int status = runSystemCommand(command);
+        if (status != 0) {
+            std::cerr << "Error: g++ failed to generate assembly for " << outcpp << "\n";
+            std::exit(EXIT_FAILURE);
+        }
+    } else if (genASM && nfile) {
+        std::string outcpp = targetPath.string() + ".cpp";
+        std::string asmFile = targetPath.string() + ".asm";
+        std::string command = "g++ -std=c++23 -S -o \"" + asmFile + "\" " + outcpp + " -w -I\"./Bin\" " + optimize + extraFlags;
+        std::cout << command << "\n";
+        int status = runSystemCommand(command);
+        if (status != 0) {
+            std::cerr << "Error: g++ failed to generate assembly for " << outcpp << "\n";
+            std::exit(EXIT_FAILURE);
+        }
+        std::ifstream asmFileStream(asmFile);
+        if (!asmFileStream.is_open()) {
+            std::cerr << "Error: could not open generated assembly file " << asmFile << "\n";
+            std::exit(EXIT_FAILURE);
+        }
+        std::cout << asmFileStream.rdbuf();
+        std::remove(asmFile.c_str());
+    }
+    else if ((!genASM && nfile)) {
+        std::ifstream ofile(targetPath.string() + ".cpp");
+        if (!ofile.is_open()) {
+            std::cerr << "Error: could not open generated file " << targetPath.string() + ".cpp" << "\n";
+            std::exit(EXIT_FAILURE);
+        }
+        std::cout << ofile.rdbuf();
     }
 }
 
@@ -222,6 +270,9 @@ int main(int argc, char* argv[]) {
     bool isOptimizel1 = false;
     bool isOptimizel2 = false;
     bool remcpp = true;
+    bool nfile = false;
+    bool runAndCompile = true;
+    bool genASM = false;
     std::string extraFlags = "";
 
     for (int i = 1; i < argc; i++) {
@@ -233,8 +284,69 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             inputFile = argv[++i];
+            if (fs::path(inputFile).extension() != ".cb") {
+                std::cerr << "Error: " << cmd << " requires a .cobalt file argument.\n";
+                return 1;
+            }
             if (cmd == "build") doBuild = true;
             else doRun = true;
+            continue;
+        }
+        else if (cmd == "conv") {
+            runAndCompile = false;
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << " requires a file argument.\n";
+                return 1;
+            }
+            inputFile = argv[++i];
+            outputFile = fs::path(inputFile).stem().string();
+            if (fs::path(inputFile).extension() != ".cb") {
+                std::cerr << "Error: " << cmd << " requires a .cobalt file argument.\n";
+                return 1;
+            }
+        }
+        else if (cmd == "conv-nfile") {
+            runAndCompile = false;
+            nfile = true;
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << " requires a file argument.\n";
+                return 1;
+            }
+            inputFile = argv[++i];
+            outputFile = fs::path(inputFile).stem().string();
+            if (fs::path(inputFile).extension() != ".cb") {
+                std::cerr << "Error: " << cmd << " requires a .cobalt file argument.\n";
+                return 1;
+            }
+        }
+        else if (cmd == "conv=asm") {
+            runAndCompile = false;
+            genASM = true;
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << " requires a file argument.\n";
+                return 1;
+            }
+            inputFile = argv[++i];
+            outputFile = fs::path(inputFile).stem().string();
+            if (fs::path(inputFile).extension() != ".cb") {
+                std::cerr << "Error: " << cmd << " requires a .cobalt file argument.\n";
+                return 1;
+            }
+        }
+        else if (cmd == "conv-nfile=asm") {
+            runAndCompile = false;
+            genASM = true;
+            nfile = true;
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << " requires a file argument.\n";
+                return 1;
+            }
+            inputFile = argv[++i];
+            outputFile = fs::path(inputFile).stem().string();
+            if (fs::path(inputFile).extension() != ".cb") {
+                std::cerr << "Error: " << cmd << " requires a .cobalt file argument.\n";
+                return 1;
+            }
         }
         else if (cmd == "lists") {
             listsLib();
@@ -314,6 +426,39 @@ int main(int argc, char* argv[]) {
             else {
                 return 0;
             }
+        }
+        else if (cmd == "update") {
+            if (i + 1 >= argc) {
+                std::cerr << "Error: " << cmd << "requires a library argument.\n";
+                return 1;
+            }
+            std::string lib = argv[++i];
+            if (!fs::exists("./lib")) {
+                fs::create_directories("./lib");
+            }
+            if (lib == "update") {
+                lib = argv[i++];
+            }
+            if (!fs::exists("./lib/" + lib + "/")) {
+                std::cout << lib << "is not exist on library path.\n";
+                return 0;
+            }
+            else {
+                std::string command = "rmdir /s /q \"./lib/" + lib + "\"";
+                std::cout << command << "\n";
+                std::system(command.c_str());
+            }
+            if (installPackage(lib)) {
+                if (fs::exists("./lib/" + lib + "/") && fs::is_directory("./lib/" + lib + "/")) {
+                    return 0;
+                }
+                std::cout << lib << " successfully updated.\n";
+            }
+            else {
+                std::cerr << "Error: failed to update \"" << lib << "\" (not found in Cobalt-Package, a dependency failed, or no network access).\n";
+                return 1;
+            }
+            return 0;
         }
         else if (cmd == "install") {
             if (i + 1 >= argc) {
@@ -422,39 +567,42 @@ Options:
             return 1;
         }
     }
+    if (runAndCompile) {
+        if (doBuild && doRun) {
+            std::cerr << "Error: pass either -build or -run, not both.\n";
+            return 1;
+        }
+        if (!doBuild && !doRun) {
+            std::cerr << "Error: pass -build <file> or -run <file>. See --help.\n";
+            return 1;
+        }
 
-    if (doBuild && doRun) {
-        std::cerr << "Error: pass either -build or -run, not both.\n";
-        return 1;
-    }
-    if (!doBuild && !doRun) {
-        std::cerr << "Error: pass -build <file> or -run <file>. See --help.\n";
-        return 1;
-    }
+        if (isOptimizeFast) {
+            optimizeCode = " -Ofast ";
+        }
+        else if (isOptimizel2) {
+            optimizeCode = " -O2 ";
+        }
+        else if (isOptimizel1) {
+            optimizeCode = " -O1  ";
+        }
+        else {
+            optimizeCode = " -O0 "; // default to no optimization
+        }
+        if (doRun && extraFlags != "") {
+            std::cerr << "Warning: extra flags '" << extraFlags << "' will be ignored in -run mode.\n";
+        }
 
-    if (isOptimizeFast) {
-        optimizeCode = " -Ofast ";
-    }
-    else if (isOptimizel2) {
-        optimizeCode = " -O2 ";
-    }
-    else if (isOptimizel1) {
-        optimizeCode = " -O1  ";
-    }
-    else {
-        optimizeCode = " -O0 "; // default to no optimization
-    }
-    if (doRun && extraFlags != "") {
-        std::cerr << "Warning: extra flags '" << extraFlags << "' will be ignored in -run mode.\n";
-    }
-
-    if (doBuild) compile(inputFile, outputFile, isDeb, remcpp, optimizeCode, extraFlags);
-    else if (doRun) {
-        interpret(inputFile, outputFile, isDeb, remcpp, optimizeCode);
-    }
-    else {
-        std::cerr << "Error: no action specified. Use -build or -run. See --help.\n";
-        return 1;
+        if (doBuild) compile(inputFile, outputFile, isDeb, remcpp, optimizeCode, extraFlags);
+        else if (doRun) {
+            interpret(inputFile, outputFile, isDeb, remcpp, optimizeCode);
+        }
+        else {
+            std::cerr << "Error: no action specified. Use -build or -run. See --help.\n";
+            return 1;
+        }
+    } else {
+        noCompile(inputFile, outputFile, isDeb, nfile, genASM, optimizeCode, extraFlags);
     }
 
     return 0;

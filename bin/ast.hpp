@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_set>
+#include <cstdint>
 
 // ---------- Expressions ----------
 
@@ -41,13 +42,13 @@ using StmtPtr = std::shared_ptr<Stmt>;
 
 class VarDecl : public Stmt {
 public:
-    std::string type;      // int, string, float, double, byte, char, List
-    std::string elemType;  // element type when type == "List"
-    std::string secElemType;
-    std::string name;
-    int arraySize = -1;    // >=0 for "char c[20]"
-    ExprPtr init;          // never null -- every declaration requires an initializer (memory safety)
-    bool isNull = false;   // always false; kept for structural compatibility
+    std::string type;         // int, string, float, double, byte, char, List
+    std::string elemType;     // element type when type == "List"
+    std::string secElemType;  // element type when type == "frac"
+    std::string name;         // name of the variable
+    int arraySize = -1;       // >=0 for "char c[20]"
+    ExprPtr init;             // never null -- every declaration requires an initializer (memory safety)
+    bool isNull = false;      // always false; kept for structural compatibility
 };
 
 struct MemberExpr : Expr
@@ -55,8 +56,19 @@ struct MemberExpr : Expr
     ExprPtr object;
     std::string member;
 };
+struct MethodMemberExpr : Expr
+{
+    ExprPtr object;
+    std::string member;
+};
 
 struct MethodCallExpr : Expr
+{
+    ExprPtr object;
+    std::string method;
+    std::vector<ExprPtr> args;
+};
+struct NamespaceCallExpr : Expr
 {
     ExprPtr object;
     std::string method;
@@ -162,6 +174,12 @@ public:
     bool pvr = false;
 };
 
+class ModuleDecl {
+public:
+    std::string name;
+    std::vector<StmtPtr> body;
+};
+
 class StructCode {
 public:
     std::string name;
@@ -173,6 +191,9 @@ class ClsPrivate { public: std::vector<StmtPtr> body; };
 
 class LibImport { public: std::string libName; };
 
+class Use { public: std::string first; std::string second; uint32_t mode; };
+class AutoUse { public: std::string libName; uint32_t mode; };
+
 class Program {
 public:
     std::vector<LibImport> imports;
@@ -180,6 +201,9 @@ public:
     std::vector<FunctionDecl> functions;
     std::vector<ClassDecl> classes;
     std::vector<StructCode> struc;
+    std::vector<Use> uses;
+    std::vector<AutoUse> autouses;
+    std::vector<ModuleDecl> modules;
     std::unordered_set<std::string> usedObjects;
 };
 

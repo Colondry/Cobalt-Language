@@ -8,7 +8,9 @@ enum class TokenType {
     // literals / names
     Identifier, Number, String, Char,
     // keywords
+    Module, Arrow_Up,
     Class, Public, Private,
+    AutoUse, Use, UseAs, UseClass,
     Struct,
     Fn, Ret, Lambda,
     If, Elif, Else,
@@ -24,6 +26,7 @@ enum class TokenType {
     TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte,
     TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,
     TypeLong, TypeInt8, TypeInt16, TypeInt32, TypeInt64,
+    TypeLonger,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,

@@ -125,6 +125,24 @@ static std::string emitExpr(const ExprPtr& e) {
         out += ")";
         return out;
     }
+    if (auto mm = std::dynamic_pointer_cast<NamespaceCallExpr>(e)) {
+        std::string out = emitExpr(mm->object);
+        out += "::";
+        out += mm->method;
+        out += "(";
+
+        for (size_t i = 0; i < mm->args.size(); i++)
+        {
+            if (i) out += ", ";
+            out += emitExpr(mm->args[i]);
+        }
+
+        out += ")";
+        return out;
+    }
+    if (auto mem = std::dynamic_pointer_cast<MethodMemberExpr>(e)) {
+        return emitExpr(mem->object) + "::" + mem->member;
+    }
     throw std::runtime_error("Unknown expression.");
 }
 
@@ -141,13 +159,6 @@ static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::of
     if (newline) out << " << \"\\n\"";
     out << ";\n";
 }
-// println!("fmt {} {}", a, b) is parsed as a ConcatExpr whose first piece
-// is the format-string literal and whose remaining pieces are the
-// substitution arguments. std::print/std::println (<print>, C++23) are
-// real functions that take the format string as their first argument and
-// do their own {} substitution -- they don't have an operator<<, so this
-// forwards the format string and args straight through as call arguments:
-//   std::println("Name = {}\nAge = {}", Info.name, Info.age);
 static void emitPrintMacStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
     out << indent(depth) << (newline ? "std::println(" : "std::print(");
     if (value) {
@@ -315,6 +326,22 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << ");\n";
         return;
     }
+    if (auto nc = std::dynamic_pointer_cast<NamespaceCallExpr>(stmt)) {
+        out << indent(depth);
+        out << emitExpr(nc->object);   // Convert ExprPtr to string
+        out << "::";
+        out << nc->method;
+        out << "(";
+
+        for (size_t i = 0; i < nc->args.size(); i++)
+        {
+            if (i) out << ", ";
+            out << emitExpr(nc->args[i]);
+        }
+
+        out << ");\n";
+        return;
+    }
     if (auto rp = std::dynamic_pointer_cast<RepeatCode>(stmt)) {
         out << indent(depth)
             << "for (int __value__ = 0; __value__ < "
@@ -361,18 +388,17 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
 
     file << "#include <iostream>\n";
     file << "#include <print>\n";
+    file << "#include <csystem.hpp>\n";
+    file << "#include <fsys.hpp>\n";
     file << "#include <string>\n";
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
     file << "#include <limits>\n";
     file << "#include <utility>\n";
     file << "#include <sstream>\n";
-    file << "#include <type_traits>\n";
+    file << "#include <type_traits>\n\n";
+    file << "namespace fsys = file_comm;\n";
     file << "\n";
-    file << "// `+` in Cobalt doubles as both numeric addition and string\n";
-    file << "// concatenation (`height + \"cm\"`) -- plain C++ `+` doesn't compile for\n";
-    file << "// e.g. int + const char*, so this picks string-concat vs. numeric-add\n";
-    file << "// based on the actual operand types.\n";
     file << "template<typename __L__, typename __R__>\n";
     file << "auto __cobalt_add__(const __L__& l, const __R__& r) {\n";
     file << "    if constexpr (std::is_convertible_v<std::decay_t<__L__>, std::string> ||\n";
@@ -386,11 +412,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "    }\n";
     file << "}\n";
     file << "\n";
-    file << "// readln(...) reads a whole line (unlike read(...), which stops at the\n";
-    file << "// first whitespace) -- but the target isn't always a std::string (e.g.\n";
-    file << "// `readln(Info.age)` where age is int). std::getline only accepts a\n";
-    file << "// std::string, so this reads the line as text once and then converts it\n";
-    file << "// to whatever the target's real type is.\n";
     file << "template<typename __T__>\n";
     file << "void __cobalt_readln__(__T__& target) {\n";
     file << "    std::string __line__;\n";
@@ -402,10 +423,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "    std::getline(std::cin, target);\n";
     file << "}\n";
     file << "\n";
-    file << "// Backing type for Cobalt's frac<T> / frac<T1,T2> -- a simple\n";
-    file << "// numerator/denominator pair that prints as \"num/denom\", and\n";
-    file << "// converts implicitly to std::pair<A,B> for libraries (like a\n";
-    file << "// math library) written against std::pair directly.\n";
     file << "template<typename __FracA__, typename __FracB__>\n";
     file << "struct __Fraction__ {\n";
     file << "    __FracA__ first;\n";
@@ -417,15 +434,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "    return os << f.first << \"/\" << f.second;\n";
     file << "}\n";
 
-    // Some libraries (e.g. chart, sdl3_win64) ship their own global
-    // singleton instance (`__Table__ Table;` defined once in their .cpp,
-    // `extern __Table__ Table;` declared in their header) rather than
-    // relying on the auto-declared instance codeGen normally creates for an
-    // object name it doesn't recognize (see the usedObjects loop below).
-    // Scan each imported library's header(s) for that `extern` pattern so
-    // we know which names are already provided -- otherwise codeGen would
-    // also emit `__Table__ Table;` in the generated main file and the
-    // linker would see two definitions of `Table`.
     std::unordered_set<std::string> libraryProvidedGlobals;
     static const std::regex externGlobalRe(R"(extern\s+__[A-Za-z0-9_]+__\s+([A-Za-z0-9_]+)\s*;)");
     auto scanFileForExternGlobals = [&](const fs::path& path) {
@@ -450,9 +458,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
             if (fs::exists(hpp, ec) && !ec) headerPath = hpp.string();
             else if (fs::exists(h, ec) && !ec) headerPath = h.string();
 
-            // Bundle libraries can spread their globals across several
-            // headers (Window.hpp, Draw.hpp, ...) beyond just the one
-            // matching the import name, so scan every header in the bundle.
             std::error_code dirEc;
             for (const auto& entry : fs::directory_iterator(bundleDir, dirEc)) {
                 if (dirEc) break;
@@ -469,8 +474,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         }
 
         if (headerPath.empty()) {
-            // Not found anywhere -- fall back to the old behavior and
-            // let the C++ compiler report a clear "file not found".
             file << "#include \"" << imp.libName << ".hpp\"\n";
         }
         else {
@@ -479,8 +482,14 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     }
     file << "\n";
 
+    for (const ModuleDecl& module : program.modules) {
+        file << "namespace " << module.name << " {\n";
+        emitBlock(module.body, 1, file);
+        file << "}\n";
+    }
+
     for (const ClassDecl& cls : program.classes) {
-        file << "class " << "__" << cls.name << "__ {\n";
+        file << "class " << cls.name << " {\n";
         if (cls.pub) {
             file << "public:\n";
             emitBlock(cls.publicBody, 1, file);
@@ -493,17 +502,35 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     }
 
     for (const StructCode& str : program.struc) {
-        file << "struct __" << str.name << "__ {\n";
+        file << "struct " << str.name << " {\n";
         emitBlock(str.body, 1, file);
         file << "};\n";
     }
 
     for (const StructCode& str : program.struc) {
-        file << "__" << str.name << "__ " << str.name << ";\n";
+        file << str.name << " " << str.name << ";\n";
     }
 
     for (const ClassDecl& cls : program.classes) {
-        file << "__" << cls.name << "__ " << cls.name << ";\n";
+        file << cls.name << " " << cls.name << ";\n";
+    }
+
+    for (const AutoUse& au : program.autouses) {
+        if (au.mode == 0) {
+            file << au.libName << " " << au.libName << ";\n";
+        } else {
+            file << "using namespace " << au.libName << ";\n";
+        }
+    }
+
+    file << "\n";
+
+    for (const Use& u : program.uses) {
+        if (u.mode == 0) {
+            file << u.first << " " << u.second << ";\n";
+        } else {
+            file << "namespace " << u.first << " = " << u.second << ";\n";
+        }
     }
 
     file << "\n";
@@ -520,7 +547,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         }
         if (libraryProvidedGlobals.count(obj)) alreadyDeclared = true;
         if (!alreadyDeclared) {
-            file << "__" << obj << "__ " << obj << ";\n";
+            file << obj << " " << obj << ";\n";
         }
     }
 

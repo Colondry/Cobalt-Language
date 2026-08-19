@@ -6,6 +6,8 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     // Syntax
     {"def", TokenType::Fn}, {"ret", TokenType::Ret}, {"lambda", TokenType::Lambda},
     {"class", TokenType::Class}, {"public", TokenType::Public}, {"private", TokenType::Private},
+    {"autouse", TokenType::AutoUse}, {"use", TokenType::Use}, {"as", TokenType::UseAs},
+    {"module", TokenType::Module}, {"^", TokenType::Arrow_Up},
     {"struct", TokenType::Struct},
     {"if", TokenType::If}, {"elif", TokenType::Elif}, {"else", TokenType::Else},
     {"while", TokenType::While}, {"for", TokenType::For}, {"in", TokenType::In},
@@ -33,6 +35,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"void", TokenType::TypeVoid},
     {"auto", TokenType::TypeAuto},
     {"long", TokenType::TypeLong},
+    {"longer", TokenType::TypeLonger},
     {"uint8", TokenType::TypeInt8},
     {"uint16", TokenType::TypeInt16},
     {"uint32", TokenType::TypeInt32},
@@ -116,10 +119,6 @@ std::vector<Token> tokenize(const std::string& src) {
                 word += src[i];
                 i++;
             }
-            // "print!" / "println!" are keywords that end in '!', but '!' is
-            // not a valid identifier character, so it's never included in
-            // `word` above. Check for a trailing '!' and fold it in before
-            // doing the keyword lookup.
             if (i < n && src[i] == '!') {
                 std::string bangWord = word + "!";
                 auto bangIt = keywords.find(bangWord);
@@ -177,6 +176,7 @@ std::vector<Token> tokenize(const std::string& src) {
         case '/': push(TokenType::Slash, "/"); break;
         case '.': push(TokenType::Dot, "."); break;
         case '!': push(TokenType::Not, "!"); break;
+        case '^': push(TokenType::Arrow_Up, "^"); break;
         default:
             push(TokenType::Invalid, std::string(1, c));
             break;
