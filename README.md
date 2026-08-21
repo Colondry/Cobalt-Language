@@ -106,7 +106,7 @@ class UserList {
 ### Module
 ```text
 module UserList {
-    str Name = ""
+    string Name = ""
     int age = 0
 }
 ```
@@ -114,8 +114,8 @@ module UserList {
 ```text
 module UserList { str Name = ""; int age = 0 }
 def main(): int {
-    readln("Name?" >> UserList^Name, "")
-    println(UserList^Name)
+    readln("Name?" >> UserList<Name>, "")
+    println(UserList<Name>)
     ret 0
 }
 ```
