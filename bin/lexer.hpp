@@ -21,12 +21,13 @@ enum class TokenType {
     Print, PrintLine, Read, ReadLine,
     PrintMac, PrintMacLn,
     Continue, Break,
-    Clear,
+    Clear, CType,
     // built-in types
     TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte,
     TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,
     TypeLong, TypeInt8, TypeInt16, TypeInt32, TypeInt64,
-    TypeLonger,
+    TypeLonger, TypeFloat16, TypeFloat32, TypeFloat64,
+    TypeFloat128, TypeStr,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,

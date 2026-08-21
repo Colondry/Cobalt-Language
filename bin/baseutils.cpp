@@ -13,17 +13,37 @@ bool Parser::isTypeToken(TokenType t, std::string type) {
             return true;
         }
     }
+    if (t == TokenType::Identifier && ctypeNames.count(type)) {
+        return true;
+    }
     return t == TokenType::TypeInt || t == TokenType::TypeString || t == TokenType::TypeFloat ||
         t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
         t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto
         || t == TokenType::TypeInt8 || t == TokenType::TypeInt16 || t == TokenType::TypeInt32
-        || t == TokenType::TypeInt64 || t == TokenType::TypeFrac
-        || t == TokenType::TypeLong || t == TokenType::TypeLonger;
+        || t == TokenType::TypeInt64 || t == TokenType::TypeFrac || t == TokenType::TypeStr
+        || t == TokenType::TypeLong || t == TokenType::TypeLonger
+        || t == TokenType::TypeFloat16 || t == TokenType::TypeFloat32
+        || t == TokenType::TypeFloat64 || t == TokenType::TypeFloat128;
+}
+
+// Struct/ctype names are lexically identical to a NameExpr (e.g. the struct singleton
+// "Point" in "Point.x = 10"). Only commit to parsing a declaration when the token
+// after the type is itself an identifier (the variable being declared) or, for
+// array declarations, an identifier followed by '['. Otherwise this is an
+// expression/assignment statement using the type name as a value (singleton access).
+bool Parser::looksLikeVarDecl() {
+    TokenType t = peek().type;
+    if (t == TokenType::List || t == TokenType::TypeFrac) return true; // unambiguous keyword-led generics
+    if (!isTypeToken(t, peek().text)) return false;
+    if (t != TokenType::Identifier) return true; // built-in type keywords are never valid expression starts
+    if (current + 1 >= tokens.size()) return false;
+    return tokens[current + 1].type == TokenType::Identifier;
 }
 
 std::string Parser::typeName(std::string type, TokenType t) {
     switch (t) {
     case TokenType::TypeInt: return "int";
+    case TokenType::TypeStr: return "string";
     case TokenType::TypeString: return "string";
     case TokenType::TypeFloat: return "float";
     case TokenType::TypeDouble: return "double";
@@ -38,13 +58,12 @@ std::string Parser::typeName(std::string type, TokenType t) {
     case TokenType::TypeInt16: return "std::uint16_t";
     case TokenType::TypeInt32: return "std::uint32_t";
     case TokenType::TypeInt64: return "std::uint64_t";
+    case TokenType::TypeFloat16: return "std::float16_t";
+    case TokenType::TypeFloat32: return "std::float32_t";
+    case TokenType::TypeFloat64: return "std::float64_t";
+    case TokenType::TypeFloat128: return "std::float128_t";
     default:
-        for (const StructCode& sc : program.struc) {
-            if (sc.name == type) {
-                return "__" + type + "__";
-            }
-        }
-        return peek().text;
+        return type;
     }
 }
 
@@ -275,9 +294,10 @@ ExprPtr Parser::parsePostfix() {
                 expr = m;
             }
         }
-        else if (match(TokenType::Arrow_Up)) {
-            Token member = expect(TokenType::Identifier, "member name after '^'");
+        else if (match(TokenType::Lt)) {
+            Token member = expect(TokenType::Identifier, "member name after '<'");
             auto call = std::make_shared<NamespaceCallExpr>();
+            expect(TokenType::Gt, ">");
             if (match(TokenType::LParen)) {
                 call->object = expr; // the object on which the method is called
                 call->method = member.text; // the method name
@@ -295,7 +315,6 @@ ExprPtr Parser::parsePostfix() {
                 m->member = member.text;
                 expr = m;
             }
-            
         }
         else {
             break;
@@ -532,7 +551,7 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         if (check(TokenType::Semicolon)) {
             advance();
         }
-        return nullptr;
+        return stmt;
     }
 
     if (check(TokenType::Semicolon)) {
@@ -770,6 +789,61 @@ StmtPtr Parser::parseClear() {
     }
     return stmt;
 }
+TypeDecl Parser::parseCTypeBody() {
+    advance(); // 'ctype'
+    TypeDecl decl;
+    Token nameTok = expect(TokenType::Identifier, "type name");
+    decl.name = nameTok.text;
+    ctypeNames.insert(nameTok.text);
+    expect(TokenType::Assign, "=");
+    if (check(TokenType::List)) {
+        advance(); // 'List'
+        decl.type = "List";
+        expect(TokenType::Lt, "<");
+        decl.elemType = expectType();
+        expect(TokenType::Gt, ">");
+        return decl;
+    }
+    else if (check(TokenType::TypeFrac)) {
+        advance(); // 'frac'
+        decl.type = "Fraction";
+        expect(TokenType::Lt, "<");
+        decl.elemType = expectType();
+        if (check(TokenType::Comma)) {
+            advance();
+            decl.secElemType = expectType();
+        }
+        else {
+            decl.secElemType = decl.elemType;
+        }
+        expect(TokenType::Gt, ">");
+
+        return decl;
+    }
+    else if (check(TokenType::TypeVoid)) {
+        reportError("ctype cannot be void.");
+    }
+    decl.type = expectType();
+    decl.name = nameTok.text;
+
+    if (match(TokenType::LBracket)) {
+        Token sizeTok = expect(TokenType::Number, "array size");
+        decl.arraySize = std::atoi(sizeTok.text.c_str());
+        expect(TokenType::RBracket, "]");
+    }
+    if (check(TokenType::Semicolon)) {
+        advance();
+    }
+    return decl;
+}
+
+StmtPtr Parser::parseCType() {
+    return std::make_shared<TypeDecl>(parseCTypeBody());
+}
+
+TypeDecl Parser::parseNCType() {
+    return parseCTypeBody();
+}
 
 std::vector<StmtPtr> Parser::parseCFBlock(std::string retype) {
     expect(TokenType::LBrace, "{");
@@ -881,7 +955,7 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
 }
 
 StmtPtr Parser::parseStatement(std::string retype) {
-    if (isTypeToken(peek().type, peek().text) || check(TokenType::List)) return parseVarDecl();
+    if (looksLikeVarDecl()) return parseVarDecl();
     if (check(TokenType::Ret)) return parseReturn(retype);
     if (check(TokenType::Lambda)) return parseLambdaFn(retype);
     if (check(TokenType::If)) return parseIf();
@@ -899,6 +973,7 @@ StmtPtr Parser::parseStatement(std::string retype) {
     if (check(TokenType::Repeat)) return parseRepeat();
     if (check(TokenType::Forever)) return parseForever();
     if (check(TokenType::PrintMac) || check(TokenType::PrintMacLn)) return parsePrintMac();
+    if (check(TokenType::CType)) return parseCType();
 
     reportError("unexpected token '" + peek().text + "'");
     recoverStatement();
@@ -906,7 +981,7 @@ StmtPtr Parser::parseStatement(std::string retype) {
 }
 
 StmtPtr Parser::parseSStr() {
-    if (isTypeToken(peek().type, peek().text) || check(TokenType::List)) return parseVarDecl();
+    if (looksLikeVarDecl()) return parseVarDecl();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||
         check(TokenType::If) || check(TokenType::Elif) ||
@@ -924,7 +999,7 @@ StmtPtr Parser::parseSStr() {
 }
 
 StmtPtr Parser::parseSClass() {
-    if (isTypeToken(peek().type, peek().text) || check(TokenType::List)) return parseVarDecl();
+    if (looksLikeVarDecl()) return parseVarDecl();
     if (check(TokenType::Fn)) return parseCFunction();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||
         check(TokenType::If) || check(TokenType::Elif) ||

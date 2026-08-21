@@ -17,7 +17,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"print!", TokenType::PrintMac}, {"println!", TokenType::PrintMacLn},
     {"read", TokenType::Read}, {"readln", TokenType::ReadLine},
     {"continue", TokenType::Continue}, {"break", TokenType::Break},
-    {"clear", TokenType::Clear},
+    {"clear", TokenType::Clear}, {"ctype", TokenType::CType},
 
     // Operators
     {"and", TokenType::AndAnd},
@@ -26,7 +26,8 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     // Data Types
     {"List", TokenType::List},
     {"int", TokenType::TypeInt},
-    {"str", TokenType::TypeString},
+    {"str", TokenType::TypeStr},
+    {"string", TokenType::TypeString},
     {"float", TokenType::TypeFloat},
     {"double", TokenType::TypeDouble},
     {"byte", TokenType::TypeByte},
@@ -40,6 +41,10 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"uint16", TokenType::TypeInt16},
     {"uint32", TokenType::TypeInt32},
     {"uint64", TokenType::TypeInt64},
+    {"float16", TokenType::TypeFloat16},
+    {"float32", TokenType::TypeFloat32},
+    {"float64", TokenType::TypeFloat64},
+    {"float128", TokenType::TypeFloat128},
     {"frac", TokenType::TypeFrac},
 };
 

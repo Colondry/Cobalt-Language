@@ -50,6 +50,14 @@ public:
     ExprPtr init;             // never null -- every declaration requires an initializer (memory safety)
     bool isNull = false;      // always false; kept for structural compatibility
 };
+class TypeDecl : public Stmt {
+public:
+    std::string type;         // int, string, float, double, byte, char, List
+    std::string elemType;     // element type when type == "List"
+    std::string secElemType;  // element type when type == "frac"
+    std::string name;         // name of the variable
+    int arraySize = -1;       // >=0 for "char c[20]"
+};
 
 struct MemberExpr : Expr
 {
@@ -204,6 +212,7 @@ public:
     std::vector<Use> uses;
     std::vector<AutoUse> autouses;
     std::vector<ModuleDecl> modules;
+    std::vector<TypeDecl> typedefs; // top-level 'ctype' aliases (declared outside any def/class/struct/module)
     std::unordered_set<std::string> usedObjects;
 };
 

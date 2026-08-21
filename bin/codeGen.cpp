@@ -12,11 +12,25 @@ namespace fs = std::filesystem;
 
 static std::string cppType(const std::string& t) {
     if (t == "string") return "std::string";
-    if (t == "byte") return "uint8_t";
+    if (t == "byte") return "__cobalt_byte__";
+    if (t == "std::uint8_t") return "__cobalt_byte__"; // uint8_t == unsigned char; stream it as a number, not a glyph
     return t;
 }
 
 static std::string indent(int depth) { return std::string(depth * 4, ' '); }
+
+static std::string emitTypeDeclLine(const TypeDecl& t) {
+    if (t.type == "List") {
+        return "using " + t.name + " = std::vector<" + cppType(t.elemType) + ">;\n";
+    }
+    if (t.type == "Fraction") {
+        return "using " + t.name + " = __Fraction__<" + cppType(t.elemType) + ", " + cppType(t.secElemType) + ">;\n";
+    }
+    if (t.arraySize >= 0) {
+        return "using " + t.name + " = " + cppType(t.type) + "[" + std::to_string(t.arraySize) + "];\n";
+    }
+    return "using " + t.name + " = " + cppType(t.type) + ";\n";
+}
 
 static std::string emitExpr(const ExprPtr& e);
 
@@ -217,6 +231,10 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << ";\n";
         return;
     }
+    if (auto t = std::dynamic_pointer_cast<TypeDecl>(stmt)) {
+        out << indent(depth) << emitTypeDeclLine(*t);
+        return;
+    }
     if (auto f = std::dynamic_pointer_cast<CFDecl>(stmt)) {
         out << indent(depth) << emitCFDSignature(*f) << " {\n";
         emitBlock(f->body, depth + 1, out);
@@ -397,6 +415,12 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <utility>\n";
     file << "#include <sstream>\n";
     file << "#include <type_traits>\n\n";
+    file << "#include <stdfloat>\n";
+    file << "#if defined(__STDCPP_FLOAT128_T__)\n";
+    file << "inline std::ostream& operator<<(std::ostream& os, std::float128_t v) {\n";
+    file << "    return os << static_cast<long double>(v);\n";
+    file << "}\n";
+    file << "#endif\n";
     file << "namespace fsys = file_comm;\n";
     file << "\n";
     file << "template<typename __L__, typename __R__>\n";
@@ -432,6 +456,18 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "template<typename __FracA__, typename __FracB__>\n";
     file << "std::ostream& operator<<(std::ostream& os, const __Fraction__<__FracA__, __FracB__>& f) {\n";
     file << "    return os << f.first << \"/\" << f.second;\n";
+    file << "}\n";
+    file << "struct __cobalt_byte__ {\n";
+    file << "    std::uint8_t v = 0;\n";
+    file << "    __cobalt_byte__() = default;\n";
+    file << "    __cobalt_byte__(long long x) : v(static_cast<std::uint8_t>(x)) {}\n";
+    file << "    operator int() const { return v; }\n";
+    file << "};\n";
+    file << "inline std::ostream& operator<<(std::ostream& os, __cobalt_byte__ b) {\n";
+    file << "    return os << static_cast<int>(b.v);\n";
+    file << "}\n";
+    file << "inline std::istream& operator>>(std::istream& is, __cobalt_byte__& b) {\n";
+    file << "    int __tmp__; is >> __tmp__; b.v = static_cast<std::uint8_t>(__tmp__); return is;\n";
     file << "}\n";
 
     std::unordered_set<std::string> libraryProvidedGlobals;
@@ -481,6 +517,10 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         }
     }
     file << "\n";
+
+    for (const TypeDecl& td : program.typedefs) {
+        file << emitTypeDeclLine(td);
+    }
 
     for (const ModuleDecl& module : program.modules) {
         file << "namespace " << module.name << " {\n";

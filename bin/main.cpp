@@ -518,7 +518,7 @@ int main(int argc, char* argv[]) {
             outputFile = argv[++i];
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Beta v0.7.0 \"FLuorite\"";
+            std::cout << "Cobalt Beta v0.7.1 \"FLuorite\"";
             return 0;
         }
         else if (cmd == "--help" || cmd == "help") {

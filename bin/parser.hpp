@@ -27,6 +27,7 @@ private:
     std::string source;
 
     size_t current = 0;
+    std::unordered_set<std::string> ctypeNames; // names introduced via 'ctype', usable as types thereafter
 
     // ---------- Core cursor / matching infra (defined in parser.cpp) ----------
     const Token& peek() const;
@@ -39,6 +40,7 @@ private:
 
     // ---------- Types (defined in baseutils.cpp) ----------
     bool isTypeToken(TokenType t, std::string type);
+    bool looksLikeVarDecl(); // disambiguates "StructName varname" (decl) from "StructName.field = ..." (stmt on the singleton)
     std::string typeName(std::string type, TokenType t);
     std::string expectType();
 
@@ -85,6 +87,8 @@ private:
     StmtPtr parseBreak();
     StmtPtr parseClear();
     StmtPtr parsePrintMac();
+    StmtPtr parseCType();
+    TypeDecl parseCTypeBody(); // shared by parseCType() (statement) and parseNCType() (top-level)
 
     // ---------- Top level (baseutils.cpp) ----------
     void parseImport(Program& prog);
@@ -98,6 +102,7 @@ private:
     Use parseUse();
     AutoUse parseAutoUse();
     ModuleDecl parseModule();
+    TypeDecl parseNCType(); // 'ctype' declared outside any def/class/struct/module
 };
 
 #endif
