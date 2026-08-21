@@ -518,7 +518,7 @@ int main(int argc, char* argv[]) {
             outputFile = argv[++i];
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Beta v0.7.1 \"FLuorite\"";
+            std::cout << "Cobalt Beta v0.7.1 \"Fluorite\"";
             return 0;
         }
         else if (cmd == "--help" || cmd == "help") {
@@ -532,11 +532,19 @@ Usage:
     cobalt --help
 
 Options:
+    install                Install a package via online
+    remove                 Removes a package from library PATH
+    update                 Updates a packafe from library PATH via online
+    lists                  Lists all library in current library PATH
     build                  Compile file only
     run                    Compile and immediately run the result
-    -as                    Output executable name (default: out)
+    run-fast               Run the interpreter directly (experimental)
+    conv                   Convert Cobalt code into C++ code
+    conv-nfile             Convert Cobalt code into C++ code & prints them
+    conv=asm               Convert Cobalt code into Assembly code
+    conv-nfile=asm         Comvert Cobalt code into Assembly code & prints them
+    as                    Output executable name (default: out)
     -debug                 Print parsed imports/functions before generating code
-    -run-fast              Run the interpreter directly (experimental)
     -OX                    No optimization (default)
     -O1                    Basic optimization
     -O2                    More optimization
