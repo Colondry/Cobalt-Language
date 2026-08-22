@@ -4,11 +4,8 @@
 simple, readable syntax with the performance and flexibility of native C++.
 
 Cobalt source code is compiled through a C++ backend, allowing programs to
-take advantage of native performance and the enormous C/C++ ecosystem while
+take advantage of native performance and C/C++ ecosystem while
 providing Cobalt with its own syntax, types, standard libraries, and tooling.
-
-Cobalt is currently focused on becoming a strong language for **server
-applications, databases, and general-purpose programming**.
 
 ---
 
@@ -21,7 +18,7 @@ Cobalt is still in active development.
 The language is usable for experimentation and small programs, but it is not
 yet considered production-ready.
 
-During the Alpha stage, you should expect:
+During the Beta stage, you should expect:
 
 - Breaking syntax changes
 - New language features
@@ -32,25 +29,8 @@ During the Alpha stage, you should expect:
 - Experimental features
 - Incomplete documentation
 
-Programs written for one Alpha release may require changes when upgrading to
+Programs written using an older version cobalt may require changes when upgrading to
 a newer release.
-
----
-
-## ✨ Why Cobalt?
-
-Cobalt started as a personal project to explore **compiler development,
-programming language design, and native code generation**.
-
-The goal gradually evolved into building a language that is:
-
-- Easy to read
-- Easy to learn
-- Fast enough for native applications
-- Capable of interacting with native libraries
-- Suitable for server-side software
-- Suitable for database applications
-- Flexible enough for general-purpose programming
 
 ---
 # Command Basics
@@ -166,6 +146,7 @@ def main(): int {
 }
 ```
 ---
+## Architecture
 
 Cobalt programs are translated into C++ and compiled into native executables.
 
@@ -179,3 +160,4 @@ Generated C++
 C++ compiler
      ↓
 Native executable
+```
