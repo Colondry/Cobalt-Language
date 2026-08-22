@@ -26,11 +26,6 @@ bool Parser::isTypeToken(TokenType t, std::string type) {
         || t == TokenType::TypeFloat64 || t == TokenType::TypeFloat128;
 }
 
-// Struct/ctype names are lexically identical to a NameExpr (e.g. the struct singleton
-// "Point" in "Point.x = 10"). Only commit to parsing a declaration when the token
-// after the type is itself an identifier (the variable being declared) or, for
-// array declarations, an identifier followed by '['. Otherwise this is an
-// expression/assignment statement using the type name as a value (singleton access).
 bool Parser::looksLikeVarDecl() {
     TokenType t = peek().type;
     if (t == TokenType::List || t == TokenType::TypeFrac) return true; // unambiguous keyword-led generics
@@ -333,6 +328,18 @@ ExprPtr Parser::parsePrimary() {
     if (check(TokenType::String)) {
         auto lit = std::make_shared<StringLit>();
         lit->value = advance().text;
+        return lit;
+    }
+    if (check(TokenType::LnQuote)) {
+        auto lit = std::make_shared<LnQuote>();
+        advance(); // consume '%"'
+        std::string init;
+        // LnClose is '"%'"
+        while (!check(TokenType::LnClose) && !check(TokenType::EndOfFile)) {
+            init += advance().text;
+        }
+        lit->value = "R\"(" + init + ")\""; // wrap in raw string literal syntax
+        
         return lit;
     }
     if (check(TokenType::Char)) {

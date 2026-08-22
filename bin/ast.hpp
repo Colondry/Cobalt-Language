@@ -20,6 +20,7 @@ using ExprPtr = std::shared_ptr<Expr>;
 class NumberLit : public Expr { public: std::string value; };
 class StringLit : public Expr { public: std::string value; }; // includes quotes
 class CharLit : public Expr { public: std::string value; }; // includes single quotes
+class LnQuote : public Expr { public: std::string value; }; // includes %"
 class NameExpr : public Expr { public: std::string name; };
 class ListLit : public Expr { public: std::vector<ExprPtr> items; double index; };
 class FracLit : public Expr { public: std::vector<ExprPtr> items; double index; };

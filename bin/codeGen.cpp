@@ -1,5 +1,6 @@
 #include "codeGen.hpp"
 #include "flib.hpp"
+#include "Deadcode.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -9,6 +10,19 @@
 #include <unordered_set>
 
 namespace fs = std::filesystem;
+
+// Runs the unused-variable pass over `body` and prints any warnings to
+// stderr, tagged with where the removed variable was declared. Non-fatal:
+// this only ever drops VarDecls that are provably never read (see
+// deadcode.cpp), so it never changes program behavior.
+static std::vector<StmtPtr> pruneAndReport(const std::vector<StmtPtr>& body, const std::string& where) {
+    std::vector<std::string> warnings;
+    std::vector<StmtPtr> pruned = pruneUnusedVars(body, warnings);
+    for (const std::string& w : warnings) {
+        std::cerr << "warning: " << w << " (in " << where << ")\n";
+    }
+    return pruned;
+}
 
 static std::string cppType(const std::string& t) {
     if (t == "string") return "std::string";
@@ -73,14 +87,12 @@ static std::string emitCFSignature(const CFuncDecl& fn) {
 static std::string emitExpr(const ExprPtr& e) {
     if (auto n = std::dynamic_pointer_cast<NumberLit>(e)) return n->value;
     if (auto s = std::dynamic_pointer_cast<StringLit>(e)) return s->value;
+    if (auto lq = std::dynamic_pointer_cast<LnQuote>(e)) return lq->value;
     if (auto c = std::dynamic_pointer_cast<CharLit>(e)) return c->value;
     if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return id->name;
     if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) return "(-" + emitExpr(u->operand) + ")";
     if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e)) {
         if (b->op == "+") {
-            // Plain C++ `+` doesn't compile for e.g. int + const char*
-            // (`height + "cm"`) -- __cobalt_add__ picks string-concat vs.
-            // numeric-add automatically based on the actual operand types.
             return "__cobalt_add__(" + emitExpr(b->lhs) + ", " + emitExpr(b->rhs) + ")";
         }
         return "(" + emitExpr(b->lhs) + " " + b->op + " " + emitExpr(b->rhs) + ")";
@@ -122,7 +134,7 @@ static std::string emitExpr(const ExprPtr& e) {
         return out + ")";
     }
     if (auto m = std::dynamic_pointer_cast<MemberExpr>(e)) {
-        return emitExpr(m->object) + "." + m->member; // Assuming member access is valid in C++
+        return emitExpr(m->object) + "." + m->member;
     }
     if (auto mc = std::dynamic_pointer_cast<MethodCallExpr>(e)) {
         std::string out = emitExpr(mc->object);
@@ -237,7 +249,7 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto f = std::dynamic_pointer_cast<CFDecl>(stmt)) {
         out << indent(depth) << emitCFDSignature(*f) << " {\n";
-        emitBlock(f->body, depth + 1, out);
+        emitBlock(pruneAndReport(f->body, "method '" + f->name + "'"), depth + 1, out);
         out << indent(depth) << "}\n";
         return;
     }
@@ -276,7 +288,6 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
             out << indent(depth) << "__cobalt_readln__(" << emitExpr(inStr->target) << ");\n";
         }
         else {
-            // A char limit/delimiter only makes sense reading into text.
             out << indent(depth) << "std::getline(std::cin, " << emitExpr(inStr->target) << ", " << inStr->limit << ");\n";
         }
         return;
@@ -330,7 +341,7 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto cl = std::dynamic_pointer_cast<MethodCallExpr>(stmt)) {
         out << indent(depth);
-        out << emitExpr(cl->object);   // Convert ExprPtr to string
+        out << emitExpr(cl->object);
         out << ".";
         out << cl->method;
         out << "(";
@@ -346,7 +357,7 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto nc = std::dynamic_pointer_cast<NamespaceCallExpr>(stmt)) {
         out << indent(depth);
-        out << emitExpr(nc->object);   // Convert ExprPtr to string
+        out << emitExpr(nc->object);
         out << "::";
         out << nc->method;
         out << "(";
@@ -377,7 +388,7 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto lfn = std::dynamic_pointer_cast<LambFuncDecl>(stmt)) {
         out << indent(depth) << emitLambSignature(*lfn) << " {\n";
-        emitBlock(lfn->body, depth + 1, out);
+        emitBlock(pruneAndReport(lfn->body, "lambda '" + lfn->name + "'"), depth + 1, out);
         out << indent(depth) << "};\n";
         return;
     }
@@ -407,6 +418,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <iostream>\n";
     file << "#include <print>\n";
     file << "#include <csystem.hpp>\n";
+    file << "#include <cotype.hpp>\n";
     file << "#include <fsys.hpp>\n";
     file << "#include <string>\n";
     file << "#include <vector>\n";
@@ -521,7 +533,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     for (const TypeDecl& td : program.typedefs) {
         file << emitTypeDeclLine(td);
     }
-
     for (const ModuleDecl& module : program.modules) {
         file << "namespace " << module.name << " {\n";
         emitBlock(module.body, 1, file);
@@ -593,13 +604,13 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
 
     for (const CFuncDecl& cfnd : program.cfunctions) {
         file << emitCFSignature(cfnd) << " {\n";
-        emitBlock(cfnd.body, 1, file);
+        emitBlock(pruneAndReport(cfnd.body, "function '" + cfnd.name + "'"), 1, file);
         file << "}\n\n";
     }
 
     for (const FunctionDecl& fn : program.functions) {
         file << emitSignature(fn) << " {\n";
-        emitBlock(fn.body, 1, file);
+        emitBlock(pruneAndReport(fn.body, "function '" + fn.name + "'"), 1, file);
         file << "}\n\n";
     }
 }
