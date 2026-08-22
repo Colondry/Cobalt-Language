@@ -67,6 +67,29 @@ std::vector<Token> tokenize(const std::string& src) {
 
         tokenStart = i; // every push() below belongs to the token starting here
 
+        // raw string block: %" ... "%
+        if (c == '%' && i + 1 < n && src[i + 1] == '"') {
+            i += 2; // consume '%"'
+            std::string raw;
+            bool closed = false;
+            while (i < n) {
+                if (src[i] == '"' && i + 1 < n && src[i + 1] == '%') {
+                    i += 2; // consume '"%'
+                    closed = true;
+                    break;
+                }
+                if (src[i] == '\n') line++;
+                raw += src[i];
+                i++;
+            }
+            if (!closed) {
+                push(TokenType::Invalid, "unterminated raw string block %\"...\"%");
+                continue;
+            }
+            push(TokenType::LnQuote, raw); // whole raw body, as-is, as ONE token
+            continue;
+        }
+
         // string literal
         if (c == '"') {
             std::string s = "\"";
@@ -158,8 +181,6 @@ std::vector<Token> tokenize(const std::string& src) {
             if (two == "*=") { push(TokenType::AssignMulti, two); i += 2; continue; }
             if (two == "/=") { push(TokenType::AssignSlash, two); i += 2; continue; }
             if (two == "};") { push(TokenType::SClose, two); i += 2; continue; }
-            if (two == "%\"") { push(TokenType::LnQuote, two); i += 2; continue; }
-            if (two == "\"%") { push(TokenType::LnClose, two); i += 2; continue; }
         }
 
         // single-character tokens

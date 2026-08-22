@@ -332,14 +332,7 @@ ExprPtr Parser::parsePrimary() {
     }
     if (check(TokenType::LnQuote)) {
         auto lit = std::make_shared<LnQuote>();
-        advance(); // consume '%"'
-        std::string init;
-        // LnClose is '"%'"
-        while (!check(TokenType::LnClose) && !check(TokenType::EndOfFile)) {
-            init += advance().text;
-        }
-        lit->value = "R\"(" + init + ")\""; // wrap in raw string literal syntax
-        
+        lit->value = "R\"(" + advance().text + ")\"";
         return lit;
     }
     if (check(TokenType::Char)) {
@@ -732,30 +725,30 @@ StmtPtr Parser::parseReadLineCode() {
     ExprPtr firstOperand = parseLogicalOr();
 
     if (check(TokenType::Shr)) {
-        // inputstr("prompt" >> var), var can be `x` or a member path like `Info.name`
+        // readln("prompt" >> var), var can be `x` or a member path like `Info.name`
         advance(); // '>>'
         stmt->prompt = firstOperand; // any expression is fine as a prompt, not just string literals
         stmt->target = parsePostfix();
     }
     else if (std::dynamic_pointer_cast<NameExpr>(firstOperand) || std::dynamic_pointer_cast<MemberExpr>(firstOperand)) {
-        // inputstr(var) or inputstr(Info.name)
+        // readln(var) or readln(Info.name)
         stmt->target = firstOperand;
     }
     else {
-        reportError("expected a variable name inside inputstr(...), like inputstr(x) or inputstr(\"prompt\" >> x)");
+        reportError("expected a variable name inside readln(...), like readln(x) or readln(\"prompt\" >> x)");
     }
 
     if (match(TokenType::Comma)) {
-        // inputstr(..., 'limit')
+        // readln(..., 'limit')
         if (!check(TokenType::Char)) {
-            reportError("expected a char literal for the limit in inputstr(..., limit)");
+            reportError("expected a char literal for the limit in readln(..., limit)");
         }
         ExprPtr limitExpr = parseExpression();
         if (auto limitLit = std::dynamic_pointer_cast<CharLit>(limitExpr)) {
             stmt->limit = limitLit->value;
         }
         else {
-            reportError("expected a char literal for the limit in inputstr(..., limit)");
+            reportError("expected a char literal for the limit in readln(..., limit)");
         }
     }
     else {

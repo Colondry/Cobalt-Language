@@ -186,7 +186,7 @@ static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::of
     out << ";\n";
 }
 static void emitPrintMacStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
-    out << indent(depth) << (newline ? "std::println(" : "std::print(");
+    out << indent(depth) << (newline ? "cprintln(" : "cprint(");
     if (value) {
         if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value); c && !c->pieces.empty()) {
             out << emitExpr(c->pieces[0]);
@@ -281,15 +281,12 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         return;
     }
     if (auto inStr = std::dynamic_pointer_cast<ReadLine>(stmt)) {
-        if (inStr->prompt) {
-            out << indent(depth) << "std::cout << " << emitExpr(inStr->prompt) << ";\n";
+        out << indent(depth);
+        out << "__cobalt_readln__(" << emitExpr(inStr->prompt) << ", " << emitExpr(inStr->target);
+        if (!inStr->limit.empty()) {
+            out << ", '" << inStr->limit << "'";
         }
-        if (inStr->limit.empty()) {
-            out << indent(depth) << "__cobalt_readln__(" << emitExpr(inStr->target) << ");\n";
-        }
-        else {
-            out << indent(depth) << "std::getline(std::cin, " << emitExpr(inStr->target) << ", " << inStr->limit << ");\n";
-        }
+        out << ");\n";
         return;
     }
     if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmt)) {
@@ -416,7 +413,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     }
 
     file << "#include <iostream>\n";
-    file << "#include <print>\n";
+    file << "#include <format>\n";
     file << "#include <csystem.hpp>\n";
     file << "#include <cotype.hpp>\n";
     file << "#include <fsys.hpp>\n";
@@ -429,6 +426,8 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <type_traits>\n\n";
     file << "#include <stdfloat>\n";
     file << "#if defined(__STDCPP_FLOAT128_T__)\n";
+    file << "#define COBALT_INLINE inline __attribute__((always_inline))\n";
+    file << "#define COBALT_RESTRICT __restrict__\n";
     file << "inline std::ostream& operator<<(std::ostream& os, std::float128_t v) {\n";
     file << "    return os << static_cast<long double>(v);\n";
     file << "}\n";
@@ -448,17 +447,21 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "    }\n";
     file << "}\n";
     file << "\n";
-    file << "template<typename __T__>\n";
-    file << "void __cobalt_readln__(__T__& target) {\n";
-    file << "    std::string __line__;\n";
-    file << "    std::getline(std::cin, __line__);\n";
-    file << "    std::istringstream __iss__(__line__);\n";
-    file << "    __iss__ >> target;\n";
-    file << "}\n";
-    file << "inline void __cobalt_readln__(std::string& target) {\n";
-    file << "    std::getline(std::cin, target);\n";
+    file << "inline void __cobalt_init_io__() {\n";
+    file << "    std::ios_base::sync_with_stdio(false);\n";
     file << "}\n";
     file << "\n";
+    file << "template<typename T>\n";
+    file << "inline void __cobalt_readln__(const std::string& prompt, T& target, char delim = '\\n') {\n";
+    file << "    std::cout << prompt;\n";
+    file << "\n";
+    file << "    if constexpr (std::is_same_v<T, std::string>) {\n";
+    file << "        std::getline(std::cin, target, delim);\n";
+    file << "    } else {\n";
+    file << "        std::cin >> target;\n";
+    file << "        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), delim); \n";
+    file << "    }\n";
+    file << "}\n";
     file << "template<typename __FracA__, typename __FracB__>\n";
     file << "struct __Fraction__ {\n";
     file << "    __FracA__ first;\n";
@@ -481,6 +484,17 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "inline std::istream& operator>>(std::istream& is, __cobalt_byte__& b) {\n";
     file << "    int __tmp__; is >> __tmp__; b.v = static_cast<std::uint8_t>(__tmp__); return is;\n";
     file << "}\n";
+    file << R"(
+template<typename... Args>
+void cprintln(std::string_view fmt, Args&&... args) {
+    std::cout << std::vformat(fmt, std::make_format_args(args...)) << '\n';
+}
+
+template<typename... Args>
+void cprint(std::string_view fmt, Args&&... args) {
+    std::cout << std::vformat(fmt, std::make_format_args(args...));
+})";
+    file << "\n";
 
     std::unordered_set<std::string> libraryProvidedGlobals;
     static const std::regex externGlobalRe(R"(extern\s+__[A-Za-z0-9_]+__\s+([A-Za-z0-9_]+)\s*;)");
@@ -610,6 +624,9 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
 
     for (const FunctionDecl& fn : program.functions) {
         file << emitSignature(fn) << " {\n";
+        if (fn.name == "main") {
+            file << indent(1) << "__cobalt_init_io__();\n";
+        }
         emitBlock(pruneAndReport(fn.body, "function '" + fn.name + "'"), 1, file);
         file << "}\n\n";
     }

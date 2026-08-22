@@ -186,11 +186,11 @@ void noCompile(const std::string& inputFile, const std::string& outputFile, bool
     }
 }
 
-void interpret(const std::string& inputFile, const std::string& outputFile, bool isDeb, bool isRemCPP, std::string optimize) {
+void interpret(const std::string& inputFile, const std::string& outputFile, bool isDeb, bool isRemCPP, std::string optimize, const std::string& extraFlags) {
     Program program = parseAndGenerate(inputFile, outputFile, isDeb);
     std::string outcpp = outputFile + ".cpp";
 
-    if (!invokeCppCompiler(program, inputFile, outputFile, optimize, " -pipe -fuse-ld=bfd -flto ")) {
+    if (!invokeCppCompiler(program, inputFile, outputFile, optimize, extraFlags)) {
         std::cerr << "Error: g++ failed to build " << outputFile << ".cpp\n";
         std::cerr << "(" << outcpp << " was left in place so you can inspect it.)\n";
         std::exit(EXIT_FAILURE);
@@ -273,6 +273,7 @@ int main(int argc, char* argv[]) {
     bool nfile = false;
     bool runAndCompile = true;
     bool genASM = false;
+    int_least8_t config = 0;
     std::string extraFlags = "";
 
     for (int i = 1; i < argc; i++) {
@@ -510,15 +511,27 @@ int main(int argc, char* argv[]) {
         else if (cmd == "-O3" || cmd == "-OPerformance") {
             isOptimizeFast = true;
         }
-        else if (cmd == "as") {
+        else if (cmd == "-as") {
             if (i + 1 >= argc) {
                 std::cerr << "Error: -name requires an argument.\n";
                 return 1;
             }
             outputFile = argv[++i];
         }
+        else if (cmd == "-config=debug") {
+            config = 0;
+        }
+        else if (cmd == "-config=release") {
+            config = 1;
+        }
+        else if (cmd == "-config=secure") {
+            config = 2;
+        }
+        else if (cmd == "-config=more!") {
+            config = 3;
+        }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Beta v0.7.1 \"Fluorite\"";
+            std::cout << "Cobalt Beta v0.7.2 \"Fluorite\"";
             return 0;
         }
         else if (cmd == "--help" || cmd == "help") {
@@ -543,17 +556,18 @@ Options:
     conv-nfile             Convert Cobalt code into C++ code & prints them
     conv=asm               Convert Cobalt code into Assembly code
     conv-nfile=asm         Comvert Cobalt code into Assembly code & prints them
-    as                    Output executable name (default: out)
+    -as                    Output executable name (default: out)
     -debug                 Print parsed imports/functions before generating code
     -OX                    No optimization (default)
     -O1                    Basic optimization
     -O2                    More optimization
     -O3                    Aggressive optimization (may break some code)
     -OPerformance          Same as -optimize-lvl-3
-    -pipe                  Use pipe for linking (may speed up linking)
-    -fuse-bfd              Use BFD linker instead of default (may speed up linking)
-    -flto                  Enable link-time optimization (may speed up linking)
     -cpp                   Keep the generated .cpp instead of deleting it
+    -config=debug          Use debug configuration (default) which is the most verbose configuration
+    -config=release        Use release configuration which is the most stable configuration
+    -config=secure         Use secure configuration which is the most secure configuration
+    -config=more!          Use more! configuration which is the most optimized configuration
     
     version                Show version
     help                   Show this help
@@ -561,20 +575,52 @@ Options:
         )" << "\n";
             return 0;
         }
-        else if (cmd == "-pipe") {
-            extraFlags += " -pipe ";
-        }
-        else if (cmd == "-fuse-bfd ") {
-            extraFlags += " -fuse-ld=bfd ";
-        }
-        else if (cmd == "-flto") {
-            extraFlags += " -flto ";
-        }
         else {
             std::cerr << "Unknown argument '" << cmd << "'. See --help.\n";
             return 1;
         }
     }
+    if (isOptimizeFast) {
+        optimizeCode = " -Ofast ";
+    }
+    else if (isOptimizel2) {
+        optimizeCode = " -O2 ";
+    }
+    else if (isOptimizel1) {
+        optimizeCode = " -O1  ";
+    }
+    else {
+        optimizeCode = " -O0 "; // default to no optimization
+    }
+    switch (config) {
+        case 0:
+            extraFlags += " -march=native -pipe ";
+            optimizeCode = " -O0 ";
+            break;
+        case 1:
+            extraFlags += " -pipe -flto -march=native -mtune=native -fno-plt ";
+            optimizeCode = " -O3 ";
+            break;
+        case 2:
+            extraFlags += " -pipe ";
+            optimizeCode = " -O2 ";
+            #ifndef _WIN32
+                extraFlags += " -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=2 ";
+            #else
+                extraFlags += " -fstack-protector-strong ";
+            #endif
+            break;
+        case 3:
+            extraFlags += " -flto=auto -march=native -mtune=native -fno-plt -funroll-loops -finline-functions -fomit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=3 -Wp,-D_GLIBCXX_ASSERTIONS ";
+            optimizeCode = " -Ofast ";
+            #ifndef _WIN32
+                extraFlags += " -fstack-clash-protection -fcf-protection=full -fPIE -pie ";
+            #endif
+            break;
+        default:
+            break;
+    }
+
     if (runAndCompile) {
         if (doBuild && doRun) {
             std::cerr << "Error: pass either -build or -run, not both.\n";
@@ -584,26 +630,9 @@ Options:
             std::cerr << "Error: pass -build <file> or -run <file>. See --help.\n";
             return 1;
         }
-
-        if (isOptimizeFast) {
-            optimizeCode = " -Ofast ";
-        }
-        else if (isOptimizel2) {
-            optimizeCode = " -O2 ";
-        }
-        else if (isOptimizel1) {
-            optimizeCode = " -O1  ";
-        }
-        else {
-            optimizeCode = " -O0 "; // default to no optimization
-        }
-        if (doRun && extraFlags != "") {
-            std::cerr << "Warning: extra flags '" << extraFlags << "' will be ignored in -run mode.\n";
-        }
-
         if (doBuild) compile(inputFile, outputFile, isDeb, remcpp, optimizeCode, extraFlags);
         else if (doRun) {
-            interpret(inputFile, outputFile, isDeb, remcpp, optimizeCode);
+            interpret(inputFile, outputFile, isDeb, remcpp, optimizeCode, extraFlags);
         }
         else {
             std::cerr << "Error: no action specified. Use -build or -run. See --help.\n";
