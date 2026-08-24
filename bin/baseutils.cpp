@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <algorithm>
+#include <string>
 #include <unordered_set>
 
 // ---------- Type tokens ----------
@@ -38,8 +39,8 @@ bool Parser::looksLikeVarDecl() {
 std::string Parser::typeName(std::string type, TokenType t) {
     switch (t) {
     case TokenType::TypeInt: return "int";
-    case TokenType::TypeStr: return "string";
-    case TokenType::TypeString: return "string";
+    case TokenType::TypeStr: return "c_string";
+    case TokenType::TypeString: return "c_string";
     case TokenType::TypeFloat: return "float";
     case TokenType::TypeDouble: return "double";
     case TokenType::TypeByte: return "byte";

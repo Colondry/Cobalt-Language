@@ -413,87 +413,17 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     }
 
     file << "#include <iostream>\n";
-    file << "#include <format>\n";
     file << "#include <csystem.hpp>\n";
     file << "#include <cotype.hpp>\n";
     file << "#include <fsys.hpp>\n";
+    file << "#include <errors.hpp>\n";
+    file << "#include <runtime.hpp>\n";
+    file << "#include <inf.hpp>\n";
     file << "#include <string>\n";
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
-    file << "#include <limits>\n";
-    file << "#include <utility>\n";
-    file << "#include <sstream>\n";
-    file << "#include <type_traits>\n\n";
     file << "#include <stdfloat>\n";
-    file << "#if defined(__STDCPP_FLOAT128_T__)\n";
-    file << "#define COBALT_INLINE inline __attribute__((always_inline))\n";
-    file << "#define COBALT_RESTRICT __restrict__\n";
-    file << "inline std::ostream& operator<<(std::ostream& os, std::float128_t v) {\n";
-    file << "    return os << static_cast<long double>(v);\n";
-    file << "}\n";
-    file << "#endif\n";
-    file << "namespace fsys = file_comm;\n";
-    file << "\n";
-    file << "template<typename __L__, typename __R__>\n";
-    file << "auto __cobalt_add__(const __L__& l, const __R__& r) {\n";
-    file << "    if constexpr (std::is_convertible_v<std::decay_t<__L__>, std::string> ||\n";
-    file << "                  std::is_convertible_v<std::decay_t<__R__>, std::string>) {\n";
-    file << "        std::ostringstream __oss__;\n";
-    file << "        __oss__ << l << r;\n";
-    file << "        return __oss__.str();\n";
-    file << "    }\n";
-    file << "    else {\n";
-    file << "        return l + r;\n";
-    file << "    }\n";
-    file << "}\n";
-    file << "\n";
-    file << "inline void __cobalt_init_io__() {\n";
-    file << "    std::ios_base::sync_with_stdio(false);\n";
-    file << "}\n";
-    file << "\n";
-    file << "template<typename T>\n";
-    file << "inline void __cobalt_readln__(const std::string& prompt, T& target, char delim = '\\n') {\n";
-    file << "    std::cout << prompt;\n";
-    file << "\n";
-    file << "    if constexpr (std::is_same_v<T, std::string>) {\n";
-    file << "        std::getline(std::cin, target, delim);\n";
-    file << "    } else {\n";
-    file << "        std::cin >> target;\n";
-    file << "        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), delim); \n";
-    file << "    }\n";
-    file << "}\n";
-    file << "template<typename __FracA__, typename __FracB__>\n";
-    file << "struct __Fraction__ {\n";
-    file << "    __FracA__ first;\n";
-    file << "    __FracB__ second;\n";
-    file << "    operator std::pair<__FracA__, __FracB__>() const { return {first, second}; }\n";
-    file << "};\n";
-    file << "template<typename __FracA__, typename __FracB__>\n";
-    file << "std::ostream& operator<<(std::ostream& os, const __Fraction__<__FracA__, __FracB__>& f) {\n";
-    file << "    return os << f.first << \"/\" << f.second;\n";
-    file << "}\n";
-    file << "struct __cobalt_byte__ {\n";
-    file << "    std::uint8_t v = 0;\n";
-    file << "    __cobalt_byte__() = default;\n";
-    file << "    __cobalt_byte__(long long x) : v(static_cast<std::uint8_t>(x)) {}\n";
-    file << "    operator int() const { return v; }\n";
-    file << "};\n";
-    file << "inline std::ostream& operator<<(std::ostream& os, __cobalt_byte__ b) {\n";
-    file << "    return os << static_cast<int>(b.v);\n";
-    file << "}\n";
-    file << "inline std::istream& operator>>(std::istream& is, __cobalt_byte__& b) {\n";
-    file << "    int __tmp__; is >> __tmp__; b.v = static_cast<std::uint8_t>(__tmp__); return is;\n";
-    file << "}\n";
-    file << R"(
-template<typename... Args>
-void cprintln(std::string_view fmt, Args&&... args) {
-    std::cout << std::vformat(fmt, std::make_format_args(args...)) << '\n';
-}
 
-template<typename... Args>
-void cprint(std::string_view fmt, Args&&... args) {
-    std::cout << std::vformat(fmt, std::make_format_args(args...));
-})";
     file << "\n";
 
     std::unordered_set<std::string> libraryProvidedGlobals;
@@ -572,10 +502,6 @@ void cprint(std::string_view fmt, Args&&... args) {
         file << "};\n";
     }
 
-    for (const StructCode& str : program.struc) {
-        file << str.name << " " << str.name << ";\n";
-    }
-
     for (const ClassDecl& cls : program.classes) {
         file << cls.name << " " << cls.name << ";\n";
     }
@@ -625,7 +551,7 @@ void cprint(std::string_view fmt, Args&&... args) {
     for (const FunctionDecl& fn : program.functions) {
         file << emitSignature(fn) << " {\n";
         if (fn.name == "main") {
-            file << indent(1) << "__cobalt_init_io__();\n";
+            file << indent(1) << "syncw_stdio(false);\n";
         }
         emitBlock(pruneAndReport(fn.body, "function '" + fn.name + "'"), 1, file);
         file << "}\n\n";

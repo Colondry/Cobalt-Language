@@ -589,35 +589,52 @@ Options:
     else if (isOptimizel1) {
         optimizeCode = " -O1  ";
     }
-    else {
-        optimizeCode = " -O0 "; // default to no optimization
+    else if (optimizeCode == " -O0 ") {
+        optimizeCode = " -O0 ";
     }
+    else {
+        optimizeCode = " -O2 ";
+    }
+    extraFlags += " -pipe ";
     switch (config) {
-        case 0:
-            extraFlags += " -march=native -pipe ";
-            optimizeCode = " -O0 ";
+        case 0: // Debug - Fast Compilation & Debugging
+            optimizeCode = "-O0";
+            extraFlags += " -g -g3 -DDEBUG";
             break;
-        case 1:
-            extraFlags += " -pipe -flto -march=native -mtune=native -fno-plt ";
-            optimizeCode = " -O3 ";
+
+        case 1: // Release - Fast & Balanced
+            optimizeCode = "-O3";
+            extraFlags += " -flto=auto -march=native -mtune=native";
+    #ifndef _WIN32
+            extraFlags += " -fno-plt";
+    #endif
             break;
-        case 2:
-            extraFlags += " -pipe ";
-            optimizeCode = " -O2 ";
-            #ifndef _WIN32
-                extraFlags += " -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=2 ";
-            #else
-                extraFlags += " -fstack-protector-strong ";
-            #endif
+
+        case 2: // Secure - Hardened Production Build
+            optimizeCode = "-O2";
+            extraFlags += " -fstack-protector-strong";
+    #ifndef _WIN32
+            extraFlags += " -fstack-clash-protection -D_FORTIFY_SOURCE=2 -fPIE -pie";
+    #else
+            extraFlags += " -D_FORTIFY_SOURCE=2";
+    #endif
             break;
-        case 3:
-            extraFlags += " -flto=auto -march=native -mtune=native -fno-plt -funroll-loops -finline-functions -fomit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=3 -Wp,-D_GLIBCXX_ASSERTIONS ";
-            optimizeCode = " -Ofast ";
-            #ifndef _WIN32
-                extraFlags += " -fstack-clash-protection -fcf-protection=full -fPIE -pie ";
-            #endif
+
+        case 3: // High Performance / Maximum Aggressive Optimization
+            optimizeCode = "-O3";
+            extraFlags += " -flto=auto -march=native -mtune=native -funroll-loops "
+                        "-finline-functions -fomit-frame-pointer";
+    #ifndef _WIN32
+            extraFlags += " -fno-plt -fstack-clash-protection -fcf-protection=full "
+                        "-D_FORTIFY_SOURCE=3";
+    #else
+            // Windows/MinGW safe hardening flags
+            extraFlags += " -fstack-protector-strong -D_FORTIFY_SOURCE=2";
+    #endif
             break;
+
         default:
+            optimizeCode = "-O2";
             break;
     }
 
