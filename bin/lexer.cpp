@@ -18,6 +18,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"read", TokenType::Read}, {"readln", TokenType::ReadLine},
     {"continue", TokenType::Continue}, {"break", TokenType::Break},
     {"clear", TokenType::Clear}, {"ctype", TokenType::CType},
+    {"!use", TokenType::nUse},
 
     // Operators
     {"and", TokenType::AndAnd},
@@ -65,9 +66,7 @@ std::vector<Token> tokenize(const std::string& src) {
         if (c == '\n') { line++; i++; continue; }
         if (std::isspace(static_cast<unsigned char>(c))) { i++; continue; }
 
-        tokenStart = i; // every push() below belongs to the token starting here
-
-        // raw string block: %" ... "%
+        tokenStart = i;
         if (c == '%' && i + 1 < n && src[i + 1] == '"') {
             i += 2; // consume '%"'
             std::string raw;

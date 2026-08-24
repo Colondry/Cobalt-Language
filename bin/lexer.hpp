@@ -11,6 +11,7 @@ enum class TokenType {
     Module, Arrow_Up,
     Class, Public, Private,
     AutoUse, Use, UseAs, UseClass,
+    nUse,
     Struct,
     Fn, Ret, Lambda,
     If, Elif, Else,

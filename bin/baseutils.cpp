@@ -1,10 +1,12 @@
 #include "baseutils.hpp"
 #include "ast.hpp"
+#include "flib.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <algorithm>
 #include <string>
 #include <unordered_set>
+#include <filesystem>
 
 // ---------- Type tokens ----------
 
@@ -1102,12 +1104,29 @@ void Parser::parseSBlock(StructCode& str) {
 // ---------- Top level ----------
 
 void Parser::parseImport(Program& prog) {
-    advance(); // '@'
     expect(TokenType::Import, "'import'");
     expect(TokenType::Lt, "<");
     Token lib = expect(TokenType::Identifier, "library name");
     expect(TokenType::Gt, ">");
     prog.imports.push_back({ lib.text });
+    std::string headerPath;
+    std::string bundleDir = findLibraryDir(lib.text, inputFileDir);
+    if (!bundleDir.empty()) {
+        std::error_code ec;
+        for (const char* ext : { ".hpp", ".h" }) {
+            std::filesystem::path candidate = std::filesystem::path(bundleDir) / (lib.text + ext);
+            if (std::filesystem::exists(candidate, ec) && !ec) {
+                headerPath = candidate.string();
+                break;
+            }
+        }
+    }
+    if (headerPath.empty()) headerPath = findLibraryFile(lib.text, ".hpp", inputFileDir);
+    if (headerPath.empty()) return;
+
+    for (const std::string& typeName : scanExternalTypeNames(headerPath)) {
+        ctypeNames.insert(typeName);
+    }
 }
 
 FunctionDecl Parser::parseFunction() {
@@ -1195,6 +1214,14 @@ AutoUse Parser::parseAutoUse() {
     Token libName = expect(TokenType::Identifier, "library name");
     autouse.libName = libName.text;
     return autouse;
+}
+
+nUse Parser::parsenUse() {
+    advance(); // '!use'
+    nUse notuse;
+    Token name = expect(TokenType::Identifier, "name");
+    if (name.text == "built-in") notuse.name = name.text;
+    return notuse;
 }
 
 ModuleDecl Parser::parseModule() {

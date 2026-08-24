@@ -413,13 +413,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     }
 
     file << "#include <iostream>\n";
-    file << "#include <csystem.hpp>\n";
-    file << "#include <cotype.hpp>\n";
-    file << "#include <fsys.hpp>\n";
-    file << "#include <errors.hpp>\n";
-    file << "#include <runtime.hpp>\n";
-    file << "#include <inf.hpp>\n";
-    file << "#include <string>\n";
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
     file << "#include <stdfloat>\n";
@@ -458,19 +451,21 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
                 if (ext == ".hpp" || ext == ".h") scanFileForExternGlobals(entry.path());
             }
         }
-        if (headerPath.empty()) {
-            headerPath = findLibraryFile(imp.libName, ".hpp", inputFileDir);
-        }
-        if (!headerPath.empty() && bundleDir.empty()) {
-            scanFileForExternGlobals(headerPath);
-        }
+        if (headerPath.empty()) headerPath = findLibraryFile(imp.libName, ".hpp", inputFileDir);
+        if (!headerPath.empty() && bundleDir.empty()) scanFileForExternGlobals(headerPath);
 
-        if (headerPath.empty()) {
-            file << "#include \"" << imp.libName << ".hpp\"\n";
-        }
-        else {
-            file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
-        }
+        if (headerPath.empty()) file << "#include \"" << imp.libName << ".hpp\"\n";
+        else file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
+    }
+    bool csm = true;
+    for (const nUse& nu : program.notuses) csm = false;
+    if (csm) {
+        file << "#include <csystem.hpp>\n";
+        file << "#include <cotype.hpp>\n";
+        file << "#include <fsys.hpp>\n";
+        file << "#include <errors.hpp>\n";
+        file << "#include <runtime.hpp>\n";
+        file << "#include <inf.hpp>\n";
     }
     file << "\n";
 

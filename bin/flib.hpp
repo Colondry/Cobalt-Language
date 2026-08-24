@@ -16,5 +16,6 @@ std::string findLibraryFile(const std::string& name, const std::string& extensio
 std::string findLibraryDir(const std::string& name, const std::string& inputFileDir);
 std::vector<std::string> listCppFilesIn(const std::string& dir);
 std::string findLibraryLinkFlags(const std::string& bundleDir);
+std::vector<std::string> scanExternalTypeNames(const std::string& headerPath);
 
 #endif

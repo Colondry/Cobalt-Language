@@ -6,6 +6,7 @@
 #include <set>
 #include <vector>
 #include <algorithm>
+#include <regex>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -117,6 +118,22 @@ std::string findFile(const std::string& filename)
 #endif
 }
 
+std::vector<std::string> scanExternalTypeNames(const std::string& headerPath) {
+    std::vector<std::string> names;
+    std::ifstream in(headerPath);
+    if (!in) return names;
+
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    std::string text = ss.str();
+
+    static const std::regex typeRe(R"((?:struct|class)\s+([A-Za-z_][A-Za-z0-9_]*)\s*[{:])");
+    for (std::sregex_iterator it(text.begin(), text.end(), typeRe), end; it != end; ++it) {
+        names.push_back((*it)[1].str());
+    }
+    return names;
+}
+
 std::string preprocessFile(const std::string& sourcePath) {
     std::set<std::string> visited;
     return preprocessRecursive(sourcePath, visited);
@@ -144,6 +161,7 @@ std::string findLibraryDir(const std::string& name, const std::string& inputFile
     }
     return "";
 }
+
 
 std::vector<std::string> listCppFilesIn(const std::string& dir) {
     std::vector<std::string> result;
