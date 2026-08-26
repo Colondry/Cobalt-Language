@@ -857,19 +857,42 @@ static void setupStmtDispatch() {
         return normal();
         });
 
-    onStmt<ForRangeStmt>([](ForRangeStmt* f) {
-        Value from = evaluateExpr(f->from);
-        Value to = evaluateExpr(f->to);
+    onStmt<ForRangeStmt>([&](ForRangeStmt* f) {
+        // Case 1: Check if condition is a function call like range(start, end)
+        if (auto call = std::dynamic_pointer_cast<CallExpr>(f->condition)) {
+            if (call->callee == "range" && call->args.size() == 2) {
+                int start = evaluateExpr(call->args[0]).intValue;
+                int end = evaluateExpr(call->args[1]).intValue;
+
+                Value& loopVar = lvalue(f->varName);
+                
+                for (int i = start; i < end; i++) {
+                    loopVar.intValue = i;
+
+                    ExecResult r = execBlock(f->body);
+                    if (r.state == ExecState::Break) break;
+                    if (r.state == ExecState::Return) return r;
+                    if (r.state == ExecState::Continue) continue;
+                }
+                return normal();
+            }
+        }
+
+        // Case 2: Standard range bound evaluation (e.g. for i in 10)
+        Value limit = evaluateExpr(f->condition);
         Value& loopVar = lvalue(f->varName);
-        loopVar = from;
-        while (loopVar.intValue <= to.intValue) {
+
+        for (int i = 0; i < limit.intValue; i++) {
+            loopVar.intValue = i;
+
             ExecResult r = execBlock(f->body);
             if (r.state == ExecState::Break) break;
             if (r.state == ExecState::Return) return r;
-            loopVar.intValue++;
+            if (r.state == ExecState::Continue) continue;
         }
+
         return normal();
-        });
+    });
 
     onStmt<ContinueStmt>([](ContinueStmt*) { ExecResult r; r.state = ExecState::Continue; return r; });
     onStmt<BreakStmt>([](BreakStmt*) { ExecResult r; r.state = ExecState::Break; return r; });

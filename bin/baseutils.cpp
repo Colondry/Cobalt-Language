@@ -26,7 +26,7 @@ bool Parser::isTypeToken(TokenType t, std::string type) {
         || t == TokenType::TypeInt64 || t == TokenType::TypeFrac || t == TokenType::TypeStr
         || t == TokenType::TypeLong || t == TokenType::TypeLonger
         || t == TokenType::TypeFloat16 || t == TokenType::TypeFloat32
-        || t == TokenType::TypeFloat64 || t == TokenType::TypeFloat128;
+        || t == TokenType::TypeFloat64 || t == TokenType::TypeFloat128 || t == TokenType::TypeFILE;
 }
 
 bool Parser::looksLikeVarDecl() {
@@ -60,6 +60,7 @@ std::string Parser::typeName(std::string type, TokenType t) {
     case TokenType::TypeFloat32: return "std::float32_t";
     case TokenType::TypeFloat64: return "std::float64_t";
     case TokenType::TypeFloat128: return "std::float128_t";
+    case TokenType::TypeFILE: return "std::FILE*";
     default:
         return type;
     }
@@ -640,19 +641,21 @@ StmtPtr Parser::parseForever() {
 StmtPtr Parser::parseForRange() {
     advance(); // 'for'
     Token nameTok = expect(TokenType::Identifier, "loop variable");
-    expect(TokenType::In, "'in'");
-    Token rangeTok = expect(TokenType::Identifier, "'range'");
-    if (rangeTok.text != "range") {
-        reportError("only 'range(...)' is supported in for-loops");
-    }
-    expect(TokenType::LParen, "(");
     auto stmt = std::make_shared<ForRangeStmt>();
+    expect(TokenType::In, "'in'");
     stmt->varName = nameTok.text;
-    stmt->from = parseExpression();
-    expect(TokenType::Comma, ",");
-    stmt->to = parseExpression();
-    expect(TokenType::RParen, ")");
+    stmt->condition= parseExpression();
     stmt->body = parseBlock("");
+    return stmt;
+}
+
+StmtPtr Parser::parseTryExcept() {
+    advance(); // 'try'
+    auto stmt = std::make_shared<TryExcept>();
+    stmt->tryBody = parseBlock("");
+    expect(TokenType::Except, "except"); // 'except'
+    stmt->exceptCond = parseExpression();
+    stmt->exceptBody = parseBlock("");
     return stmt;
 }
 
@@ -977,6 +980,7 @@ StmtPtr Parser::parseStatement(std::string retype) {
     if (check(TokenType::Forever)) return parseForever();
     if (check(TokenType::PrintMac) || check(TokenType::PrintMacLn)) return parsePrintMac();
     if (check(TokenType::CType)) return parseCType();
+    if (check(TokenType::Try)) return parseTryExcept();
 
     reportError("unexpected token '" + peek().text + "'");
     recoverStatement();
@@ -1211,17 +1215,19 @@ AutoUse Parser::parseAutoUse() {
     } else {
         reportError("expected 'module' or 'class' after 'autouse'");
     }
-    Token libName = expect(TokenType::Identifier, "library name");
+    Token libName; 
+    if (check(TokenType::Identifier)) libName = expect(TokenType::Identifier, "identifier");
+    else if (check(TokenType::CSM)) libName = expect(TokenType::CSM, "'csm");
+    else reportError("expected an identifier or 'csm'");
     autouse.libName = libName.text;
     return autouse;
 }
 
-nUse Parser::parsenUse() {
+bool Parser::parsenUse() {
     advance(); // '!use'
-    nUse notuse;
-    Token name = expect(TokenType::Identifier, "name");
-    if (name.text == "built-in") notuse.name = name.text;
-    return notuse;
+    expect(TokenType::CSM, "csm module");
+    if (check(TokenType::Semicolon)) advance();
+    return false;
 }
 
 ModuleDecl Parser::parseModule() {

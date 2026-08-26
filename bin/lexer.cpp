@@ -18,7 +18,8 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"read", TokenType::Read}, {"readln", TokenType::ReadLine},
     {"continue", TokenType::Continue}, {"break", TokenType::Break},
     {"clear", TokenType::Clear}, {"ctype", TokenType::CType},
-    {"!use", TokenType::nUse},
+    {"notuse", TokenType::nUse}, {"csm", TokenType::CSM},
+    {"try", TokenType::Try}, {"except", TokenType::Except},
 
     // Operators
     {"and", TokenType::AndAnd},
@@ -47,6 +48,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"float64", TokenType::TypeFloat64},
     {"float128", TokenType::TypeFloat128},
     {"frac", TokenType::TypeFrac},
+    {"FILE", TokenType::TypeFILE},
 };
 
 std::vector<Token> tokenize(const std::string& src) {

@@ -11,6 +11,7 @@
 #include <string_view>
 #include <stdfloat>
 #include <string>
+#include <cstddef>
 
 #if defined(__STDCPP_FLOAT128_T__)
 inline std::ostream& operator<<(std::ostream& os, std::float128_t v) {
@@ -28,10 +29,6 @@ auto __cobalt_add__(const __L__& l, const __R__& r) {
     } else [[likely]] {
         return l + r;
     }
-}
-
-inline void syncw_stdio(bool s) {
-    std::ios_base::sync_with_stdio(s);
 }
 
 template<typename T>
@@ -105,26 +102,95 @@ struct c_string {
     char data[MAX_SIZE] = "";
     size_t length = 0;
 
-    // 1. Default Constructor: c_string s;
+    static inline bool is_whitespace(char c) {
+        return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v');
+    }
+
+    // --- Fast Custom Find (Char) ---
+    int find(char target, size_t start_pos = 0) const {
+        if (start_pos >= length) return -1;
+        
+        const char* ptr = data + start_pos;
+        const char* end_ptr = data + length;
+
+        while (ptr < end_ptr) {
+            if (*ptr == target) return static_cast<int>(ptr - data);
+            ptr++;
+        }
+        return -1;
+    }
+
+    // --- Fast Custom Find (Substring/Raw Buffer) ---
+    int find(const char* needle, size_t needle_len, size_t start_pos = 0) const {
+        if (needle_len == 0) return start_pos <= length ? static_cast<int>(start_pos) : -1;
+        if (start_pos + needle_len > length || !needle) return -1;
+
+        const char first = needle[0];
+        const char* cur = data + start_pos;
+        const char* max_search = data + (length - needle_len);
+
+        while (cur <= max_search) {
+            if (*cur == first) {
+                size_t i = 1;
+                while (i < needle_len && cur[i] == needle[i]) {
+                    i++;
+                }
+                if (i == needle_len) {
+                    return static_cast<int>(cur - data);
+                }
+            }
+            cur++;
+        }
+        return -1;
+    }
+
+    // Overloads for c_string and C-strings
+    int find(const c_string& needle, size_t start_pos = 0) const {
+        return find(needle.data, needle.length, start_pos);
+    }
+
+    int find(const char* needle, size_t start_pos = 0) const {
+        if (!needle) return -1;
+        size_t n_len = 0;
+        while (needle[n_len] != '\0') n_len++;
+        return find(needle, n_len, start_pos);
+    }
+
+    // 1. Default Constructor
     c_string() : length(0) { data[0] = '\0'; }
 
-    // 2. Implicit Literal Constructor: c_string name = "Hello";
+    // 2. Implicit Literal / C-string Constructor
     c_string(const char* str) {
         assign(str);
     }
 
-    // 3. Copy Constructor
+    // 3. Sliced Constructor (Length-bounded)
+    c_string(const char* str, size_t len) {
+        if (str && len > 0) {
+            length = (len < MAX_SIZE - 1) ? len : MAX_SIZE - 1;
+            std::memcpy(data, str, length);
+        } else {
+            length = 0;
+        }
+        data[length] = '\0';
+    }
+
+    // 4. Copy Constructor
     c_string(const c_string& other) {
         assign(other.data);
     }
+	
+	operator std::string() const {
+		return std::string(data, length);
+	}
 
-    // 4. Assignment Operator: name = "World";
+    // 5. Assignment Operator (const char*)
     c_string& operator=(const char* str) {
         assign(str);
         return *this;
     }
 
-    // 5. Assignment Operator between CobaltStrings
+    // 6. Assignment Operator (c_string)
     c_string& operator=(const c_string& other) {
         if (this != &other) {
             assign(other.data);
@@ -132,7 +198,7 @@ struct c_string {
         return *this;
     }
 
-    // 6. Concatenation Operator: s1 + s2 or s1 + "lit"
+    // 7. Concatenation Operator
     c_string operator+(const c_string& other) const {
         c_string result = *this;
         if (result.length + other.length < MAX_SIZE) {
@@ -142,10 +208,10 @@ struct c_string {
         return result;
     }
 
-    // 7. Implicit Conversion to `const char*` (Allows C-style functions & easy passing)
+    // 8. Implicit Conversion to `const char*`
     operator const char*() const { return data; }
 
-    // 8. Array Indexing: s[0]
+    // 9. Array Indexing
     char& operator[](size_t index) { return data[index]; }
     const char& operator[](size_t index) const { return data[index]; }
 
@@ -154,7 +220,7 @@ struct c_string {
         return std::strcmp(data, other.data) == 0;
     }
     bool operator==(const char* str) const {
-        return std::strcmp(data, str) == 0;
+        return str && std::strcmp(data, str) == 0;
     }
 
 private:
@@ -171,7 +237,23 @@ private:
     }
 };
 
-// 9. Enable std::cout << name; directly!
+// Stream Operators
 inline std::ostream& operator<<(std::ostream& os, const c_string& str) {
     return os << str.data;
 }
+
+inline std::istream& operator>>(std::istream& is, c_string& str) {
+    std::string temp;
+    if (is >> temp) {
+        str = temp.c_str();
+    }
+    return is;
+}
+
+// std::formatter specialization
+template <>
+struct std::formatter<c_string> : std::formatter<std::string_view> {
+    auto format(const c_string& s, std::format_context& ctx) const {
+        return std::formatter<std::string_view>::format(std::string_view(s.data, s.length), ctx);
+    }
+};

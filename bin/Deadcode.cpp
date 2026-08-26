@@ -72,9 +72,18 @@ static void collectUsesInBlock(const std::vector<StmtPtr>& body, std::unordered_
         else if (auto ei = std::dynamic_pointer_cast<ElifStmt>(s))       { collectUses(ei->condition, used); collectUsesInBlock(ei->body, used); }
         else if (auto el = std::dynamic_pointer_cast<ElseStmt>(s))       collectUsesInBlock(el->body, used);
         else if (auto w = std::dynamic_pointer_cast<WhileStmt>(s))       { collectUses(w->condition, used); collectUsesInBlock(w->body, used); }
-        else if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(s))    { collectUses(f->from, used); collectUses(f->to, used); collectUsesInBlock(f->body, used); }
+        else if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(s)) {
+            if (f->condition) {
+                collectUses(f->condition, used);
+            }
+            collectUsesInBlock(f->body, used);
+        }
         else if (auto rp = std::dynamic_pointer_cast<RepeatCode>(s))     { collectUses(rp->value, used); collectUsesInBlock(rp->body, used); }
         else if (auto fr = std::dynamic_pointer_cast<ForeverCode>(s))    collectUsesInBlock(fr->body, used);
+        else if (auto te = std::dynamic_pointer_cast<TryExcept>(s))      { collectUsesInBlock(te->tryBody, used); 
+                                                                           collectUsesInBlock(te->exceptBody, used);
+                                                                           collectUses(te->exceptCond, used);
+                                                                         }
         // CFDecl / LambFuncDecl (nested fn decls) intentionally left alone
     }
 }
@@ -87,6 +96,10 @@ static void pruneNestedBodies(const StmtPtr& s, std::vector<std::string>& warnin
     else if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(s)) f->body = pruneUnusedVars(f->body, warnings);
     else if (auto rp = std::dynamic_pointer_cast<RepeatCode>(s))  rp->body = pruneUnusedVars(rp->body, warnings);
     else if (auto fr = std::dynamic_pointer_cast<ForeverCode>(s)) fr->body = pruneUnusedVars(fr->body, warnings);
+    else if (auto te = std::dynamic_pointer_cast<TryExcept>(s)) { 
+        te->tryBody = pruneUnusedVars(te->tryBody, warnings); 
+        te->exceptBody = pruneUnusedVars(te->exceptBody, warnings);
+    }
 }
 
 std::vector<StmtPtr> pruneUnusedVars(const std::vector<StmtPtr>& body, std::vector<std::string>& warnings) {

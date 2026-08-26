@@ -144,9 +144,15 @@ public:
 class ForRangeStmt : public Stmt {
 public:
     std::string varName;
-    ExprPtr from;
-    ExprPtr to;
+    ExprPtr condition;
     std::vector<StmtPtr> body;
+};
+
+class TryExcept : public Stmt {
+public:
+    std::vector<StmtPtr> tryBody;
+    ExprPtr exceptCond;
+    std::vector<StmtPtr> exceptBody;
 };
 
 // ---------- Top level ----------
@@ -202,7 +208,6 @@ class LibImport { public: std::string libName; };
 
 class Use { public: std::string first; std::string second; uint32_t mode; };
 class AutoUse { public: std::string libName; uint32_t mode; };
-class nUse { public: std::string name; };
 
 class Program {
 public:
@@ -215,7 +220,7 @@ public:
     std::vector<AutoUse> autouses;
     std::vector<ModuleDecl> modules;
     std::vector<TypeDecl> typedefs; // top-level 'ctype' aliases (declared outside any def/class/struct/module)
-    std::vector<nUse> notuses;
+    bool use_built = true;
     std::unordered_set<std::string> usedObjects;
 };
 

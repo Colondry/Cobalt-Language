@@ -1,3 +1,21 @@
+#ifdef _WIN32
+  #define WIN32_LEAN_AND_MEAN
+  #define TokenType Win32_TokenType // Rename Windows enum symbol before it gets declared
+  #include <windows.h>
+  #include <psapi.h>
+  #undef TokenType                  // Restore 'TokenType' for your lexer/parser
+#elif defined(__APPLE__) || defined(__linux__)
+    #include <sys/types.h>
+    #include <sys/wait.h>
+    #include <sys/resource.h>
+    #include <unistd.h>
+    #if defined(__APPLE__)
+        #include <libproc.h>
+    #elif defined(__linux__)
+        #include <fstream>
+    #endif
+#endif
+
 #include <iostream>
 #include <cstdio>
 #include <filesystem>
@@ -5,6 +23,10 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <thread>
+#include <chrono>
+#include <numeric>
+
 #include <nlohmann/json.hpp>
 #include "lexer.hpp"
 #include "parser.hpp"
@@ -34,7 +56,7 @@ std::string toRunnableCommand(const fs::path& exePath) {
     if (p.find(' ') == std::string::npos) return p;
     return "\"" + p + "\"";
 }
-\
+
 int runSystemCommand(const std::string& command) {
 #ifdef _WIN32
     if (!command.empty() && command.front() == '"') {
@@ -74,6 +96,110 @@ Program parseAndGenerate(const std::string& inputFile, const std::string& output
     }
     codeGen(program, outFile, fs::path(inputFile).parent_path().string());
     return program;
+}
+
+#if defined(__APPLE__) || defined(__linux__)
+static double getProcessMemoryMB(pid_t pid) {
+#if defined(__APPLE__)
+    struct proc_taskinfo pti;
+    if (proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti)) == sizeof(pti)) {
+        return static_cast<double>(pti.pti_resident_size) / (1024.0 * 1024.0);
+    }
+#elif defined(__linux__)
+    std::ifstream statm("/proc/" + std::to_string(pid) + "/statm");
+    if (statm.is_open()) {
+        long totalPages = 0, rssPages = 0;
+        statm >> totalPages >> rssPages;
+        long pageSize = sysconf(_SC_PAGESIZE);
+        return static_cast<double>(rssPages * pageSize) / (1024.0 * 1024.0);
+    }
+#endif
+    return 0.0;
+}
+#endif
+
+void executeAndMeasure(const std::string& exePath) {
+    std::vector<double> ramSamplesMB;
+    double totalCpuSeconds = 0.0;
+
+#ifdef _WIN32
+    STARTUPINFOA si = { sizeof(si) };
+    PROCESS_INFORMATION pi;
+    if (!CreateProcessA(exePath.c_str(), NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        std::cerr << "Failed to start process for profiling.\n";
+        return;
+    }
+
+    PROCESS_MEMORY_COUNTERS pmc;
+    while (WaitForSingleObject(pi.hProcess, 15) == WAIT_TIMEOUT) {
+        if (GetProcessMemoryInfo(pi.hProcess, &pmc, sizeof(pmc))) {
+            ramSamplesMB.push_back(pmc.WorkingSetSize / (1024.0 * 1024.0));
+        }
+    }
+
+    // Final sample check before process handle closes
+    if (GetProcessMemoryInfo(pi.hProcess, &pmc, sizeof(pmc))) {
+        ramSamplesMB.push_back(pmc.WorkingSetSize / (1024.0 * 1024.0));
+    }
+
+    FILETIME ftCreate, ftExit, ftKernel, ftUser;
+    GetProcessTimes(pi.hProcess, &ftCreate, &ftExit, &ftKernel, &ftUser);
+    
+    uint64_t kTime = ((uint64_t)ftKernel.dwHighDateTime << 32) | ftKernel.dwLowDateTime;
+    uint64_t uTime = ((uint64_t)ftUser.dwHighDateTime << 32) | ftUser.dwLowDateTime;
+    totalCpuSeconds = (kTime + uTime) / 10000000.0;
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+#elif defined(__APPLE__) || defined(__linux__)
+    pid_t pid = fork();
+    if (pid < 0) {
+        std::cerr << "Failed to fork process.\n";
+        return;
+    }
+
+    if (pid == 0) {
+        execl(exePath.c_str(), exePath.c_str(), nullptr);
+        _exit(127);
+    }
+
+    int status = 0;
+    struct rusage ru {};
+
+    while (true) {
+        double ram = getProcessMemoryMB(pid);
+        if (ram > 0.0) {
+            ramSamplesMB.push_back(ram);
+        }
+
+        // Non-blocking wait to check process exit and populate rusage
+        pid_t res = wait4(pid, &status, WNOHANG, &ru);
+        if (res == pid || res < 0) {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    }
+
+    totalCpuSeconds = (ru.ru_utime.tv_sec + ru.ru_stime.tv_sec) +
+                       (ru.ru_utime.tv_usec + ru.ru_stime.tv_usec) / 1000000.0;
+#endif
+
+    if (!ramSamplesMB.empty()) {
+        auto [minIt, maxIt] = std::minmax_element(ramSamplesMB.begin(), ramSamplesMB.end());
+        double avgRam = std::accumulate(ramSamplesMB.begin(), ramSamplesMB.end(), 0.0) / ramSamplesMB.size();
+
+        std::cout << "\n--- Resource Report ---" << std::endl;
+        std::cout << "RAM Peak : " << *maxIt << " MB\n";
+        std::cout << "RAM Avg  : " << avgRam << " MB\n";
+        std::cout << "RAM Min  : " << *minIt << " MB\n";
+        std::cout << "Total CPU Time Spent: " << totalCpuSeconds << " seconds\n";
+    } else {
+        std::cout << "\n--- Resource Report ---" << std::endl;
+        std::cout << "No memory samples collected.\n";
+        std::cout << "Total CPU Time Spent: " << totalCpuSeconds << " seconds\n";
+    }
 }
 
 bool invokeCppCompiler(const Program& program, const std::string& inputFile, const std::string& outputFile, const std::string& optimize, const std::string& extraFlags) {
@@ -137,6 +263,7 @@ void compile(const std::string& inputFile, const std::string& outputFile, bool i
         std::cerr << "(" << outcpp << " was left in place so you can inspect it.)\n";
         std::exit(EXIT_FAILURE);
     }
+    
 
     if (isRemCPP) {
         std::remove(outcpp.c_str());
@@ -186,7 +313,7 @@ void noCompile(const std::string& inputFile, const std::string& outputFile, bool
     }
 }
 
-void interpret(const std::string& inputFile, const std::string& outputFile, bool isDeb, bool isRemCPP, std::string optimize, const std::string& extraFlags) {
+void interpret(const std::string& inputFile, const std::string& outputFile, bool isDeb, bool isRemCPP, std::string optimize, const std::string& extraFlags, bool ms) {
     Program program = parseAndGenerate(inputFile, outputFile, isDeb);
     std::string outcpp = outputFile + ".cpp";
 
@@ -196,18 +323,25 @@ void interpret(const std::string& inputFile, const std::string& outputFile, bool
         std::exit(EXIT_FAILURE);
     }
 
-    fs::path exePath = resolveExePath(inputFile, outputFile);
-    std::string runCommand = toRunnableCommand(exePath);
+    fs::path exePath = fs::absolute(resolveExePath(inputFile, outputFile));
+    fs::path originalDir = fs::current_path();
+    fs::path targetDir = exePath.parent_path();
 
-    int status = runSystemCommand(runCommand);
-    if (status != 0) {
-        std::cerr << "Error: execution of " << runCommand << " failed (exit status " << status << ").\n";
-        std::exit(EXIT_FAILURE);
+    if (!targetDir.empty()) {
+        fs::current_path(targetDir);
     }
+    if (ms) executeAndMeasure(exePath.string());
+    else {
+        std::string runCommand = toRunnableCommand(exePath.filename());
+        int status = runSystemCommand(runCommand);
 
-    if (isRemCPP) {
-        std::remove(outcpp.c_str());
+        if (status != 0) {
+            std::cerr << "Error: execution of " << runCommand << " failed (exit status " << status << ").\n";
+            std::exit(EXIT_FAILURE);
+        }
     }
+    fs::current_path(originalDir);
+    if (isRemCPP) std::remove(outcpp.c_str());
     std::remove(exePath.string().c_str());
 }
 
@@ -273,6 +407,7 @@ int main(int argc, char* argv[]) {
     bool nfile = false;
     bool runAndCompile = true;
     bool genASM = false;
+    bool measure = false;
     int_least8_t config = 0;
     std::string extraFlags = "";
 
@@ -496,6 +631,9 @@ int main(int argc, char* argv[]) {
         else if (cmd == "-debug") {
             isDeb = true;
         }
+        else if (cmd == "-measure") {
+            measure = true;
+        }
         else if (cmd == "-cpp") {
             remcpp = false;
         }
@@ -531,7 +669,7 @@ int main(int argc, char* argv[]) {
             config = 3;
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Beta v0.7.2 \"Fluorite\"";
+            std::cout << "Cobalt Beta v0.7.5 \"Fluorite\"";
             return 0;
         }
         else if (cmd == "--help" || cmd == "help") {
@@ -580,21 +718,7 @@ Options:
             return 1;
         }
     }
-    if (isOptimizeFast) {
-        optimizeCode = " -Ofast ";
-    }
-    else if (isOptimizel2) {
-        optimizeCode = " -O2 ";
-    }
-    else if (isOptimizel1) {
-        optimizeCode = " -O1  ";
-    }
-    else if (optimizeCode == " -O0 ") {
-        optimizeCode = " -O0 ";
-    }
-    else {
-        optimizeCode = " -O2 ";
-    }
+    
     extraFlags += " -pipe ";
     switch (config) {
         case 0: // Debug - Fast Compilation & Debugging
@@ -637,6 +761,21 @@ Options:
             optimizeCode = "-O2";
             break;
     }
+    if (isOptimizeFast) {
+        optimizeCode = " -Ofast ";
+    }
+    else if (isOptimizel2) {
+        optimizeCode = " -O2 ";
+    }
+    else if (isOptimizel1) {
+        optimizeCode = " -O1  ";
+    }
+    else if (optimizeCode == " -O0 ") {
+        optimizeCode = " -O0 ";
+    }
+    else {
+        optimizeCode = " -O2 ";
+    }
 
     if (runAndCompile) {
         if (doBuild && doRun) {
@@ -649,7 +788,7 @@ Options:
         }
         if (doBuild) compile(inputFile, outputFile, isDeb, remcpp, optimizeCode, extraFlags);
         else if (doRun) {
-            interpret(inputFile, outputFile, isDeb, remcpp, optimizeCode, extraFlags);
+            interpret(inputFile, outputFile, isDeb, remcpp, optimizeCode, extraFlags, measure);
         }
         else {
             std::cerr << "Error: no action specified. Use -build or -run. See --help.\n";

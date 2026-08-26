@@ -11,10 +11,6 @@
 
 namespace fs = std::filesystem;
 
-// Runs the unused-variable pass over `body` and prints any warnings to
-// stderr, tagged with where the removed variable was declared. Non-fatal:
-// this only ever drops VarDecls that are provably never read (see
-// deadcode.cpp), so it never changes program behavior.
 static std::vector<StmtPtr> pruneAndReport(const std::vector<StmtPtr>& body, const std::string& where) {
     std::vector<std::string> warnings;
     std::vector<StmtPtr> pruned = pruneUnusedVars(body, warnings);
@@ -299,6 +295,15 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << indent(depth) << "}\n";
         return;
     }
+    if (auto te = std::dynamic_pointer_cast<TryExcept>(stmt)) {
+        out << indent(depth) << "{\n";
+        emitBlock(te->tryBody, depth+1, out);
+        out << indent(depth) << "}\n";
+        out << indent(depth) << "if (" << emitExpr(te->exceptCond) << ") {\n";
+        emitBlock(te->exceptBody, depth+1, out);
+        out << indent(depth) << "}\n";
+        return;
+    }
     if (auto e = std::dynamic_pointer_cast<ElifStmt>(stmt)) {
         out << indent(depth) << "else if (" << emitExpr(e->condition) << ") {\n";
         emitBlock(e->body, depth + 1, out);
@@ -318,8 +323,22 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         return;
     }
     if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(stmt)) {
-        out << indent(depth) << "for (int " << f->varName << " = " << emitExpr(f->from) << "; " <<
-            f->varName << " <= " << emitExpr(f->to) << "; " << f->varName << "++) {\n";
+        // Check if the iterable expression is a function call to `range(start, end)`
+        if (auto call = std::dynamic_pointer_cast<CallExpr>(f->condition)) {
+            if (call->callee == "range" && call->args.size() == 2) {
+                std::string start = emitExpr(call->args[0]);
+                std::string end = emitExpr(call->args[1]);
+
+                out << indent(depth) << "for (int " << f->varName << " = " << start 
+                    << "; " << f->varName << " < " << end << "; " << f->varName << "++) {\n";
+                emitBlock(f->body, depth + 1, out);
+                out << indent(depth) << "}\n";
+                return;
+            }
+        }
+
+        // Fallback: Default to C++ range-based for loop for lists, arrays, and custom types
+        out << indent(depth) << "for (auto&& " << f->varName << " : " << emitExpr(f->condition) << ") {\n";
         emitBlock(f->body, depth + 1, out);
         out << indent(depth) << "}\n";
         return;
@@ -415,7 +434,10 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <iostream>\n";
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
-    file << "#include <stdfloat>\n";
+    file << "#include <stdfloat>\n\n";
+    file << "inline void syncw_stdio(bool s) {\n";
+    file << "   std::ios_base::sync_with_stdio(s);\n";
+    file << "}\n";
 
     file << "\n";
 
@@ -457,15 +479,16 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         if (headerPath.empty()) file << "#include \"" << imp.libName << ".hpp\"\n";
         else file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
     }
-    bool csm = true;
-    for (const nUse& nu : program.notuses) csm = false;
-    if (csm) {
+    if (program.use_built) { // not using '!use builtin'
         file << "#include <csystem.hpp>\n";
         file << "#include <cotype.hpp>\n";
         file << "#include <fsys.hpp>\n";
         file << "#include <errors.hpp>\n";
         file << "#include <runtime.hpp>\n";
         file << "#include <inf.hpp>\n";
+        file << "#include <cstr.hpp>\n";
+        file << "#include <fstream>\n";
+        file << "#include <cstdio>\n";
     }
     file << "\n";
 

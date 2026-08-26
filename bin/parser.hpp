@@ -13,7 +13,7 @@ class Parser
 public:
     Program program;
     Parser() = default;
-    explicit Parser(std::vector<Token> tokens, std::string source = "");
+    explicit Parser(std::vector<Token> tokens, std::string source = "", std::string inputFileDir = "");
 
     // Entry point: parses the whole token stream into a Program.
     Program parse();
@@ -25,9 +25,10 @@ private:
 
     std::vector<Token> tokens;
     std::string source;
+    std::string inputFileDir; // directory of the .cb file being compiled
 
     size_t current = 0;
-    std::unordered_set<std::string> ctypeNames; // names introduced via 'ctype', usable as types thereafter
+    std::unordered_set<std::string> ctypeNames; // names introduced via 'ctype'
 
     // ---------- Core cursor / matching infra (defined in parser.cpp) ----------
     const Token& peek() const;
@@ -87,8 +88,10 @@ private:
     StmtPtr parseBreak();
     StmtPtr parseClear();
     StmtPtr parsePrintMac();
+    StmtPtr parseTryExcept();
     StmtPtr parseCType();
     TypeDecl parseCTypeBody(); // shared by parseCType() (statement) and parseNCType() (top-level)
+
 
     // ---------- Top level (baseutils.cpp) ----------
     void parseImport(Program& prog);
@@ -102,6 +105,7 @@ private:
     Use parseUse();
     AutoUse parseAutoUse();
     ModuleDecl parseModule();
+    bool parsenUse();
     TypeDecl parseNCType(); // 'ctype' declared outside any def/class/struct/module
 };
 

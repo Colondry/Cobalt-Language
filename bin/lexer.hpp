@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 
+#ifdef TokenType
+  #undef TokenType
+#endif
+
 enum class TokenType {
     // literals / names
     Identifier, Number, String, Char,
@@ -23,12 +27,14 @@ enum class TokenType {
     PrintMac, PrintMacLn,
     Continue, Break,
     Clear, CType,
+    Try, Except,
+    CSM,
     // built-in types
     TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte,
     TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,
     TypeLong, TypeInt8, TypeInt16, TypeInt32, TypeInt64,
     TypeLonger, TypeFloat16, TypeFloat32, TypeFloat64,
-    TypeFloat128, TypeStr,
+    TypeFloat128, TypeStr, TypeFILE,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,
