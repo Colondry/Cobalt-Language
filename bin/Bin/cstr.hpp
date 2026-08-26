@@ -6,7 +6,7 @@
 #include <cstddef>
 
 namespace csm {
-	[[nodiscard]] inline std::size_t len(const c_string& str) noexcept {
+	[[nodiscard]] inline std::size_t strlen(const c_string& str) noexcept {
 		const char* ptr = static_cast<const char*>(str);
 		return ptr ? std::strlen(ptr) : 0;
 	} 
