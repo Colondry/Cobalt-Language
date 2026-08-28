@@ -206,6 +206,8 @@ std::vector<Token> tokenize(const std::string& src) {
         case '.': push(TokenType::Dot, "."); break;
         case '!': push(TokenType::Not, "!"); break;
         case '^': push(TokenType::Arrow_Up, "^"); break;
+        case '$': push(TokenType::Dollar, "$"); break;
+        case '&': push(TokenType::And, "&"); break;
         default:
             push(TokenType::Invalid, std::string(1, c));
             break;

@@ -38,7 +38,7 @@ enum class TokenType {
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,
-    Not, LnQuote, LnClose,
+    Not, LnQuote, LnClose, Dollar, And,
     // operators
     Assign, Eq, Neq, Lt, Gt, Le, Ge, AndAnd, OrOr,
     Plus, Minus, Star, Slash, Shl, Shr,

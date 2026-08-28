@@ -188,24 +188,57 @@ ExprPtr Parser::parseMultiplicative() {
         });
 }
 
-// Parses a unary expression (-, !)
+// Parses a unary expression (-, !, $, &)
 ExprPtr Parser::parseUnary() {
-    if (check(TokenType::Minus)) {
+    if (check(TokenType::Dollar)) { // Move operator '$'
         advance();
+        ExprPtr operand = parseUnary();
+        
+        if (auto nameExpr = std::dynamic_pointer_cast<NameExpr>(operand)) {
+            if (getVarState(nameExpr->name) == VariableState::Moved) {
+                reportError("Cannot move already moved value '" + nameExpr->name + "'");
+            } else {
+                setVarState(nameExpr->name, VariableState::Moved);
+            }
+        }
+        
         auto u = std::make_shared<UnaryExpr>();
-        u->op = "-"; u->operand = parseUnary();
+        u->op = "$";
+        u->operand = operand;
         return u;
     }
+
+    if (check(TokenType::And)) { // Borrow operator '&'
+        advance();
+        ExprPtr operand = parseUnary();
+        
+        if (auto nameExpr = std::dynamic_pointer_cast<NameExpr>(operand)) {
+            if (getVarState(nameExpr->name) == VariableState::Moved) {
+                reportError("Cannot borrow moved value '" + nameExpr->name + "'");
+            }
+        }
+        
+        auto u = std::make_shared<UnaryExpr>();
+        u->op = "&";
+        u->operand = operand;
+        return u;
+    }
+
     return parsePostfix();
 }
 
-// Parses a postfix expression (x[i], x++)
+// Parses compound assignment (+=, -=, *=, /=)
 StmtPtr Parser::parseAssignAMMS() {
     if (check(TokenType::Identifier) && current + 1 < tokens.size()) {
         TokenType nextType = tokens[current + 1].type;
         if (nextType == TokenType::AssignAdd || nextType == TokenType::AssignMinus ||
             nextType == TokenType::AssignMulti || nextType == TokenType::AssignSlash) {
             std::string name = advance().text;
+            
+            if (getVarState(name) == VariableState::Moved) {
+                reportError("Cannot modify moved value '" + name + "'");
+            }
+
             std::string op = advance().text; // +=, -=, *=, /=
             auto stmt = std::make_shared<AssignStmt>();
             stmt->name = name;
@@ -216,6 +249,8 @@ StmtPtr Parser::parseAssignAMMS() {
             binary->lhs = nameExpr;
             binary->rhs = parseExpression();
             stmt->value = binary;
+            
+            setVarState(name, VariableState::Active);
             return stmt;
         }
     }
@@ -226,7 +261,7 @@ StmtPtr Parser::parseAssignAMMS() {
 ExprPtr Parser::parsePostfix() {
     ExprPtr expr = parsePrimary();
     while (true) {
-        if (match(TokenType::LBracket)) { // ()
+        if (match(TokenType::LBracket)) { // []
             auto idx = std::make_shared<IndexExpr>();
             idx->base = expr;
             idx->index = parseExpression();
@@ -235,6 +270,9 @@ ExprPtr Parser::parsePostfix() {
         }
         else if (check(TokenType::PlusPlus)) { // ++
             if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
+                if (getVarState(name->name) == VariableState::Moved) {
+                    reportError("Cannot increment moved value '" + name->name + "'");
+                }
                 advance();
                 auto inc = std::make_shared<PostIncExpr>();
                 inc->name = name->name;
@@ -248,6 +286,9 @@ ExprPtr Parser::parsePostfix() {
         }
         else if (check(TokenType::MinusMinus)) { // --
             if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
+                if (getVarState(name->name) == VariableState::Moved) {
+                    reportError("Cannot decrement moved value '" + name->name + "'");
+                }
                 advance();
                 auto dec = std::make_shared<PostMinExpr>();
                 dec->name = name->name;
@@ -260,14 +301,10 @@ ExprPtr Parser::parsePostfix() {
             }
         }
         else if (match(TokenType::Dot)) {
-            Token member =
-                expect(TokenType::Identifier, "member name after '.'");
+            Token member = expect(TokenType::Identifier, "member name after '.'");
 
-            if (match(TokenType::LParen))
-            {
-                auto call =
-                    std::make_shared<MethodCallExpr>();
-
+            if (match(TokenType::LParen)) {
+                auto call = std::make_shared<MethodCallExpr>();
                 call->object = expr; // the object on which the method is called
                 call->method = member.text; // the method name
 
@@ -284,19 +321,15 @@ ExprPtr Parser::parsePostfix() {
                 expr = call;
             }
             else {
-                auto m =
-                    std::make_shared<MemberExpr>();
-
+                auto m = std::make_shared<MemberExpr>();
                 m->object = expr;
                 m->member = member.text;
-
                 expr = m;
             }
         }
-        else if (match(TokenType::Lt)) {
-            Token member = expect(TokenType::Identifier, "member name after '<'");
+        else if (match(TokenType::DoubleColon)) {
+            Token member = expect(TokenType::Identifier, "member name after '::'");
             auto call = std::make_shared<NamespaceCallExpr>();
-            expect(TokenType::Gt, ">");
             if (match(TokenType::LParen)) {
                 call->object = expr; // the object on which the method is called
                 call->method = member.text; // the method name
@@ -362,6 +395,9 @@ ExprPtr Parser::parsePrimary() {
     }
     if (check(TokenType::Identifier)) {
         std::string name = advance().text;
+        if (getVarState(name) == VariableState::Moved) {
+            reportError("Use of moved value '" + name + "' (value is null)");
+        }
         if (match(TokenType::LParen)) {
             auto call = std::make_shared<CallExpr>();
             call->callee = name;
@@ -386,12 +422,14 @@ ExprPtr Parser::parsePrimary() {
 
 std::vector<StmtPtr> Parser::parseBlock(std::string retype) {
     expect(TokenType::LBrace, "{");
+    pushScope();
     std::vector<StmtPtr> stmts;
     while (!check(TokenType::RBrace) && !check(TokenType::EndOfFile)) {
         StmtPtr s = parseStatement(retype);
         if (s) stmts.push_back(s);
     }
     expect(TokenType::RBrace, "}");
+    popScope();
     return stmts;
 }
 
@@ -405,6 +443,7 @@ StmtPtr Parser::parseVarDecl() {
         expect(TokenType::Gt, ">");
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
+        declareVar(decl->name);
 
         if (match(TokenType::Assign)) {
             expect(TokenType::LBracket, "[");
@@ -447,6 +486,7 @@ StmtPtr Parser::parseVarDecl() {
         expect(TokenType::Gt, ">");
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
+        declareVar(decl->name);
 
         if (match(TokenType::Assign)) {
             expect(TokenType::LBracket, "[");
@@ -489,6 +529,7 @@ StmtPtr Parser::parseVarDecl() {
     decl->type = expectType();
     Token nameTok = expect(TokenType::Identifier, "variable name");
     decl->name = nameTok.text;
+    declareVar(decl->name);
 
     if (match(TokenType::LBracket)) {
         Token sizeTok = expect(TokenType::Number, "array size");
@@ -525,6 +566,7 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         auto stmt = std::make_shared<AssignStmt>();
         stmt->name = name;
         stmt->value = parseExpression();
+        setVarState(name, VariableState::Active);
         if (check(TokenType::Semicolon)) {
             advance();
         }
@@ -533,9 +575,6 @@ StmtPtr Parser::parseAssignOrExprStatement() {
 
     ExprPtr expr = parseExpression();
 
-    // `object.field = value` (MemberExpr) or `list[i] = value` (IndexExpr)
-    // -- the bare-identifier fast path above only catches `name = value`,
-    // so a general lvalue expression followed by '=' lands here instead.
     if ((std::dynamic_pointer_cast<MemberExpr>(expr) || std::dynamic_pointer_cast<IndexExpr>(expr))
         && check(TokenType::Assign)) {
         advance(); // '='
@@ -576,10 +615,6 @@ StmtPtr Parser::parseReturn(std::string retype) {
     }
     else if (retype == "void") {
         reportError("ret cannot be used in a void function.");
-    }
-    else if (retype == "") {
-        reportError("ret cannot be used outside a function.");
-        advance();
     }
     else {
         reportError("Unknown return error.");

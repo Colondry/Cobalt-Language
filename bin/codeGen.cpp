@@ -22,8 +22,8 @@ static std::vector<StmtPtr> pruneAndReport(const std::vector<StmtPtr>& body, con
 
 static std::string cppType(const std::string& t) {
     if (t == "string") return "std::string";
-    if (t == "byte") return "__cobalt_byte__";
-    if (t == "std::uint8_t") return "__cobalt_byte__"; // uint8_t == unsigned char; stream it as a number, not a glyph
+    if (t == "byte") return "__byte__";
+    if (t == "std::uint8_t") return "__byte__"; // uint8_t == unsigned char; stream it as a number, not a glyph
     return t;
 }
 
@@ -34,7 +34,7 @@ static std::string emitTypeDeclLine(const TypeDecl& t) {
         return "using " + t.name + " = std::vector<" + cppType(t.elemType) + ">;\n";
     }
     if (t.type == "Fraction") {
-        return "using " + t.name + " = __Fraction__<" + cppType(t.elemType) + ", " + cppType(t.secElemType) + ">;\n";
+        return "using " + t.name + " = frac<" + cppType(t.elemType) + ", " + cppType(t.secElemType) + ">;\n";
     }
     if (t.arraySize >= 0) {
         return "using " + t.name + " = " + cppType(t.type) + "[" + std::to_string(t.arraySize) + "];\n";
@@ -86,33 +86,59 @@ static std::string emitExpr(const ExprPtr& e) {
     if (auto lq = std::dynamic_pointer_cast<LnQuote>(e)) return lq->value;
     if (auto c = std::dynamic_pointer_cast<CharLit>(e)) return c->value;
     if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return id->name;
-    if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) return "(-" + emitExpr(u->operand) + ")";
+
+    if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) {
+        if (u->op == "$") {
+            // Transfers ownership; source unique_ptr becomes nullptr
+            return "std::move(" + emitExpr(u->operand) + ")";
+        }
+        if (u->op == "&") {
+            // Borrows underlying raw pointer; safely dereferenced via .get()
+            return emitExpr(u->operand) + ".get()";
+        }
+        if (u->op == "-") {
+            return "(-" + emitExpr(u->operand) + ")";
+        }
+        if (u->op == "!") {
+            return "(!" + emitExpr(u->operand) + ")";
+        }
+    }
+
     if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e)) {
         if (b->op == "+") {
-            return "__cobalt_add__(" + emitExpr(b->lhs) + ", " + emitExpr(b->rhs) + ")";
+            return "__cadd__(" + emitExpr(b->lhs) + ", " + emitExpr(b->rhs) + ")";
         }
         return "(" + emitExpr(b->lhs) + " " + b->op + " " + emitExpr(b->rhs) + ")";
     }
+
+    // Dereference smart pointer before indexing
     if (auto idx = std::dynamic_pointer_cast<IndexExpr>(e))
-        return emitExpr(idx->base) + "[" + emitExpr(idx->index) + "]";
-    if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return pi->name + "++";
-    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) return pm->name + "--";
+        return "(*" + emitExpr(idx->base) + ")[" + emitExpr(idx->index) + "]";
+
+    if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return "(*" + pi->name + ")++";
+    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) return "(*" + pm->name + ")--";
+
     if (auto lit = std::dynamic_pointer_cast<ListLit>(e)) {
-        std::string out = "{";
+        std::string inner = "{";
         for (size_t i = 0; i < lit->items.size(); i++) {
-            if (i) out += ", ";
-            out += emitExpr(lit->items[i]);
+            if (i) inner += ", ";
+            inner += emitExpr(lit->items[i]);
         }
-        return out + "}";
+        inner += "}";
+        return "std::make_unique<std::vector<decltype(" + 
+               (lit->items.empty() ? "0" : emitExpr(lit->items[0])) + ")>>(" + inner + ")";
     }
+
     if (auto fl = std::dynamic_pointer_cast<FracLit>(e)) {
-        std::string out = "{";
+        std::string inner = "{";
         for (size_t i = 0; i < fl->items.size(); i++) {
-            if (i) out += ", ";
-            out += emitExpr(fl->items[i]);
+            if (i) inner += ", ";
+            inner += emitExpr(fl->items[i]);
         }
-        return out + "}";
+        inner += "}";
+        return "std::make_unique<frac>(" + inner + ")";
     }
+
     if (auto call = std::dynamic_pointer_cast<CallExpr>(e)) {
         std::string out = call->callee + "(";
         for (size_t i = 0; i < call->args.size(); i++) {
@@ -121,6 +147,7 @@ static std::string emitExpr(const ExprPtr& e) {
         }
         return out + ")";
     }
+
     if (auto c = std::dynamic_pointer_cast<ConcatExpr>(e)) {
         std::string out = "(";
         for (size_t i = 0; i < c->pieces.size(); i++) {
@@ -129,43 +156,47 @@ static std::string emitExpr(const ExprPtr& e) {
         }
         return out + ")";
     }
-    if (auto m = std::dynamic_pointer_cast<MemberExpr>(e)) {
-        return emitExpr(m->object) + "." + m->member;
-    }
-    if (auto mc = std::dynamic_pointer_cast<MethodCallExpr>(e)) {
-        std::string out = emitExpr(mc->object);
-        out += ".";
-        out += mc->method;
-        out += "(";
 
-        for (size_t i = 0; i < mc->args.size(); i++)
-        {
+    if (auto m = std::dynamic_pointer_cast<MemberExpr>(e)) {
+        std::string obj = emitExpr(m->object);
+        return obj + "." + m->member;
+    }
+
+    if (auto mc = std::dynamic_pointer_cast<MethodCallExpr>(e)) {
+        std::string out = emitExpr(mc->object) + "." + mc->method + "(";
+        for (size_t i = 0; i < mc->args.size(); i++) {
             if (i) out += ", ";
             out += emitExpr(mc->args[i]);
         }
-
-        out += ")";
-        return out;
+        return out + ")";
     }
-    if (auto mm = std::dynamic_pointer_cast<NamespaceCallExpr>(e)) {
-        std::string out = emitExpr(mm->object);
-        out += "::";
-        out += mm->method;
-        out += "(";
 
-        for (size_t i = 0; i < mm->args.size(); i++)
-        {
+    if (auto mm = std::dynamic_pointer_cast<NamespaceCallExpr>(e)) {
+        std::string out = emitExpr(mm->object) + "::" + mm->method + "(";
+        for (size_t i = 0; i < mm->args.size(); i++) {
             if (i) out += ", ";
             out += emitExpr(mm->args[i]);
         }
-
-        out += ")";
-        return out;
+        return out + ")";
     }
+
     if (auto mem = std::dynamic_pointer_cast<MethodMemberExpr>(e)) {
         return emitExpr(mem->object) + "::" + mem->member;
     }
+
     throw std::runtime_error("Unknown expression.");
+}
+
+// Helper function to emit unique_ptr wrapped initializers
+static std::string emitInitExpr(const std::string& typeStr, const ExprPtr& initExpr) {
+    if (!initExpr) return "nullptr";
+
+    if (auto u = std::dynamic_pointer_cast<UnaryExpr>(initExpr)) {
+        if (u->op == "$") return emitExpr(initExpr);
+    }
+
+    std::string val = emitExpr(initExpr);
+    return "std::make_unique<" + typeStr + ">(" + val + ")";
 }
 
 static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
@@ -182,7 +213,7 @@ static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::of
     out << ";\n";
 }
 static void emitPrintMacStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
-    out << indent(depth) << (newline ? "cprintln(" : "cprint(");
+    out << indent(depth) << (newline ? "println_c(" : "print_c(");
     if (value) {
         if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value); c && !c->pieces.empty()) {
             out << emitExpr(c->pieces[0]);
@@ -223,19 +254,63 @@ static void emitBlock(const std::vector<StmtPtr>& body, int depth, std::ofstream
 static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     if (auto v = std::dynamic_pointer_cast<VarDecl>(stmt)) {
         out << indent(depth);
+
         if (v->type == "List") {
-            out << "std::vector<" << cppType(v->elemType) << "> " << v->name;
+            std::string vecType = "std::vector<" + cppType(v->elemType) + ">";
+            out << "std::unique_ptr<" << vecType << "> " << v->name;
+            out << " = " << (v->init ? emitExpr(v->init) : "nullptr") << ";\n";
         }
         else if (v->type == "Fraction") {
-            out << "__Fraction__<" << cppType(v->elemType) << ", " << cppType(v->secElemType) << "> " << v->name;
-        }
-        else if (v->arraySize >= 0) {
-            out << cppType(v->type) << " " << v->name << "[" << v->arraySize << "]";
+            std::string fracType = "frac<" + cppType(v->elemType) + ", " + cppType(v->secElemType) + ">";
+            out << "std::unique_ptr<" << fracType << "> " << v->name;
+            out << " = " << (v->init ? emitExpr(v->init) : "nullptr") << ";\n";
         }
         else {
-            out << cppType(v->type) << " " << v->name;
+            std::string targetType = cppType(v->type);
+            out << "std::unique_ptr<" << targetType << "> " << v->name;
+            out << " = " << emitInitExpr(targetType, v->init) << ";\n";
         }
-        out << " = " << emitExpr(v->init);
+        return;
+    }
+
+    // Dereference target for input streams
+    if (auto in = std::dynamic_pointer_cast<ReadCode>(stmt)) {
+        if (in->prompt) {
+            out << indent(depth) << "std::cout << " << emitExpr(in->prompt) << ";\n";
+        }
+        out << indent(depth) << "std::cin >> (*" << emitExpr(in->target) << ");\n";
+        return;
+    }
+
+    // Dereference container for range-based loops
+    if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(stmt)) {
+        if (auto call = std::dynamic_pointer_cast<CallExpr>(f->condition)) {
+            if (call->callee == "range" && call->args.size() == 2) {
+                std::string start = emitExpr(call->args[0]);
+                std::string end = emitExpr(call->args[1]);
+
+                out << indent(depth) << "for (int " << f->varName << " = " << start 
+                    << "; " << f->varName << " < " << end << "; " << f->varName << "++) {\n";
+                emitBlock(f->body, depth + 1, out);
+                out << indent(depth) << "}\n";
+                return;
+            }
+        }
+
+        // Dereference smart container pointer (*expr) for C++ range iteration
+        out << indent(depth) << "for (auto&& " << f->varName << " : *(" << emitExpr(f->condition) << ")) {\n";
+        emitBlock(f->body, depth + 1, out);
+        out << indent(depth) << "}\n";
+        return;
+    }
+
+    // Print statements dereference values to avoid printing raw memory addresses
+    if (auto p = std::dynamic_pointer_cast<PrintCode>(stmt)) {
+        out << indent(depth) << "std::cout";
+        if (p->value) {
+            out << " << (*" << emitExpr(p->value) << ")";
+        }
+        if (p->newline) out << " << \"\\n\"";
         out << ";\n";
         return;
     }
@@ -261,24 +336,13 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << indent(depth) << "return" << (r->value ? " " + emitExpr(r->value) : "") << ";\n";
         return;
     }
-    if (auto p = std::dynamic_pointer_cast<PrintCode>(stmt)) {
-        emitPrintStmt(p->value, p->newline, depth, out);
-        return;
-    }
     if (auto p = std::dynamic_pointer_cast<PrintMacCode>(stmt)) {
         emitPrintMacStmt(p->value, p->newline, depth, out);
         return;
     }
-    if (auto in = std::dynamic_pointer_cast<ReadCode>(stmt)) {
-        if (in->prompt) {
-            out << indent(depth) << "std::cout << " << emitExpr(in->prompt) << ";\n";
-        }
-        out << indent(depth) << "std::cin >> " << emitExpr(in->target) << ";\n";
-        return;
-    }
     if (auto inStr = std::dynamic_pointer_cast<ReadLine>(stmt)) {
         out << indent(depth);
-        out << "__cobalt_readln__(" << emitExpr(inStr->prompt) << ", " << emitExpr(inStr->target);
+        out << "readln(" << emitExpr(inStr->prompt) << ", " << emitExpr(inStr->target);
         if (!inStr->limit.empty()) {
             out << ", '" << inStr->limit << "'";
         }
@@ -319,27 +383,6 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     if (auto w = std::dynamic_pointer_cast<WhileStmt>(stmt)) {
         out << indent(depth) << "while (" << emitExpr(w->condition) << ") {\n";
         emitBlock(w->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(stmt)) {
-        // Check if the iterable expression is a function call to `range(start, end)`
-        if (auto call = std::dynamic_pointer_cast<CallExpr>(f->condition)) {
-            if (call->callee == "range" && call->args.size() == 2) {
-                std::string start = emitExpr(call->args[0]);
-                std::string end = emitExpr(call->args[1]);
-
-                out << indent(depth) << "for (int " << f->varName << " = " << start 
-                    << "; " << f->varName << " < " << end << "; " << f->varName << "++) {\n";
-                emitBlock(f->body, depth + 1, out);
-                out << indent(depth) << "}\n";
-                return;
-            }
-        }
-
-        // Fallback: Default to C++ range-based for loop for lists, arrays, and custom types
-        out << indent(depth) << "for (auto&& " << f->varName << " : " << emitExpr(f->condition) << ") {\n";
-        emitBlock(f->body, depth + 1, out);
         out << indent(depth) << "}\n";
         return;
     }
@@ -435,6 +478,8 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
     file << "#include <stdfloat>\n\n";
+    file << "#include <utility>\n";
+    file << "#include <memory>\n";
     file << "inline void syncw_stdio(bool s) {\n";
     file << "   std::ios_base::sync_with_stdio(s);\n";
     file << "}\n";

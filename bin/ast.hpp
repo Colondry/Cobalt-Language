@@ -70,6 +70,10 @@ struct MethodMemberExpr : Expr
     ExprPtr object;
     std::string member;
 };
+struct PointerExpr : Expr {
+    ExprPtr object;
+    std::string member;
+};
 
 struct MethodCallExpr : Expr
 {
