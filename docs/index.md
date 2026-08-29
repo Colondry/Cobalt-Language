@@ -11,3 +11,6 @@ Welcome to the **Cobalt Language** documentation. Cobalt is a lightweight progra
 * **Library (`Lib/`)**: The core library directory containing built-in Cobalt modules, standard utilities, and global definitions.
 
 ---
+## Map:
+- `Introduction: Variables` : `https://cobalt-language.readthedocs.io/en/latest/variables.html`
+- `Input & Output`          : `https://cobalt-language.readthedocs.io/en/latest/inout.html`
