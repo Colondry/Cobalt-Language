@@ -1,43 +1,66 @@
 # Input & Output
 
-Input and output utilities serve as the basic foundations for interactive programs in Cobalt[cite: 2].
+Input and output utilities serve as the core building blocks for interactive terminal applications in Cobalt.
 
 ---
 
-## Input
+## Standard Input (`read` & `readln`)
 
-User input is captured using `read()` or `readln()`[cite: 2].
+Cobalt provides two primary operators for handling user terminal input: `read()` and `readln()`.
 
-* **`read()`**: Reads a single word into a string target[cite: 2].
+### 1. Single Word Input (`read`)
+
+The `read()` function captures a single space-delimited word from standard input. It uses the stream piping operator (`>>`) to assign the input into a target string:
 
 ```cobalt
 string in = ""
-read("Please enter something: " >> in)
-```[cite: 2]
+read("Please put something: " >> in)
+```
 
-* **`readln()`**: Reads an entire line with optional delimiter support[cite: 2].
+### 2. Line Input (`readln`)
+
+The `readln()` function reads an entire line of text, including whitespace. It supports both default line reading and optional custom termination delimiters.
 
 ```cobalt
-// Standard line read
+// Standard full-line read (ends on newline)
 string in1 = ""
-readln("Enter full line: " >> in1)
+readln("Please put some long thing: " >> in1)
 
-// Read until custom delimiter (e.g., period)
+// Line read with custom character delimiter
 string in2 = ""
-readln("Enter sentence: " >> in2, ".")
-```[cite: 2]
+readln("Please put some long thing: " >> in2, ".")
+```
+
+#### Custom Delimiters
+
+When a delimiter string (e.g., `"."`) is provided as the second argument to `readln()`, reading halts as soon as that character is encountered in the input stream.
 
 ---
 
-## Output
+## Standard Output (`print!` & `println!`)
 
-Terminal output is managed via the `print!()` and `println!()` macros[cite: 2].
+Terminal output in Cobalt is handled via format macros `print!()` and `println!()`.
 
-* **`print!()`**: Prints output without appending a newline[cite: 2].
-* **`println!()`**: Prints output followed by a newline[cite: 2].
+### `print!()`
+Writes text or formatted values to standard output **without** appending a trailing newline.
+
+### `println!()`
+Writes text or formatted values to standard output and automatically appends a newline (`\n`).
 
 ```cobalt
 print!("Hello, ")
 println!("World!")
-// Output: Hello, World!
-```[cite: 2]
+
+// Terminal Output:
+// Hello, World!
+```
+
+### Format Placeholders
+
+Both macros support brace placeholders (`{}`) to inject variables directly into output strings:
+
+```cobalt
+string lang = "Cobalt"
+int version = 1
+
+println!("Welcome to {} v{}", lang, version)
