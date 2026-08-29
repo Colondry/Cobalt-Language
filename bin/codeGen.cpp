@@ -88,17 +88,26 @@ static std::string emitExpr(const ExprPtr& e) {
     if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return id->name;
 
     if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) {
+        // Ownership symbol
         if (u->op == "$") {
             // Transfers ownership; source unique_ptr becomes nullptr
             return "std::move(" + emitExpr(u->operand) + ")";
         }
+        // Borrower symbol
         if (u->op == "&") {
             // Borrows underlying raw pointer; safely dereferenced via .get()
             return emitExpr(u->operand) + ".get()";
         }
+        // Pointer symbol
+        if (u->op == "*") {
+            // Protected using parenteheses '(*(<ExprPtr>))'
+            return "(*(" + emitExpr(u->operand) + "))";
+        }
+        // idk
         if (u->op == "-") {
             return "(-" + emitExpr(u->operand) + ")";
         }
+        // 'Not' boolian symbol
         if (u->op == "!") {
             return "(!" + emitExpr(u->operand) + ")";
         }
@@ -113,7 +122,7 @@ static std::string emitExpr(const ExprPtr& e) {
 
     // Dereference smart pointer before indexing
     if (auto idx = std::dynamic_pointer_cast<IndexExpr>(e))
-        return "(*" + emitExpr(idx->base) + ")[" + emitExpr(idx->index) + "]";
+        return "(" + emitExpr(idx->base) + ")[" + emitExpr(idx->index) + "]";
 
     if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return "(*" + pi->name + ")++";
     if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) return "(*" + pm->name + ")--";

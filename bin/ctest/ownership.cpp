@@ -20,17 +20,22 @@ inline int TryStatus() { return cobalt__try_status__; }
 #include <fstream>
 #include <cstdio>
 
+class UserList {
+public:
+    c_string getName() {
+        return name;
+    }
+private:
+    std::unique_ptr<c_string> name = std::make_unique<c_string>("");
+    std::unique_ptr<int> age = std::make_unique<int>(0);
+};
+UserList UserList;
 
 
 int main();
 
 int main() {
     syncw_stdio(false);
-    try {
-        csm::RuntimeError("Hello, World!");
-    }
-    catch (...) {}
-    csm::exit(csm.WITH_FAILURE);
-    return 0;
+    println_c(UserList.getName());
 }
 

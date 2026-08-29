@@ -1,5 +1,14 @@
-def main() {
-    try csm::RuntimeError("Hello, World!")
-    csm::exit(csm::WITH_FAILURE)
-    ret 0
+class UserList {
+    private {
+        # Variable Declarations
+        str name = ""
+        int age = 0
+    }
+    public {
+        def getName(): str { ret *name }
+    }
+}
+def main(): int {
+    try readln("Name: " >> *UserList.name)
+    println!(UserList.getName())
 }

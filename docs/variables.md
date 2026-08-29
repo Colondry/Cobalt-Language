@@ -3,7 +3,7 @@
 Let's do something simple, like variables.
 
 ## Variable Declarations
-Variables in Cobalt are declared staticly which means you have to let the transpiler know what type you're gonna use.
+Variables in Cobalt are staticly typed which means you have to let the transpiler know what type you're gonna use.
 
 ```cobalt
 // Standard variable bindings

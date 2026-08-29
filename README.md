@@ -11,14 +11,14 @@ providing Cobalt with its own syntax, types, standard libraries, and tooling.
 
 ## ⚠️ Project Status
 
-**Current version: Cobalt Alpha v0.7.x**
+**Current version: Cobalt Stable v0.8.x**
 
 Cobalt is still in active development.
 
 The language is usable for experimentation and small programs, but it is not
-yet considered production-ready.
+yet considered production-ready until version 1.0.
 
-During the Beta stage, you should expect:
+before v1.0 released, you should expect:
 
 - Breaking syntax changes
 - New language features
@@ -79,37 +79,37 @@ class UserList {
         int age
     }
     public {
-        def getName(): str { ret name }
+        def getName(): str { ret &name }
     }
 }
 ```
 ### Module
-```text
+```cobalt
 module UserList {
     string Name = ""
     int age = 0
 }
 ```
 ### Module Call
-```text
+```cobalt
 module UserList { str Name = ""; int age = 0 }
 def main(): int {
-    readln("Name?" >> UserList<Name>, "")
-    println(UserList<Name>)
+    readln("Name?" >> UserList::Name, "")
+    println(&UserList::Name)
     ret 0
 }
 ```
 ### Write Text
-```text
+```cobalt
 def main(): int {
-    print("Hello, ")
-    println("World!")
+    print!("Hello, ")
+    println!("World!")
 
-    ret 0;
+    ret 0
 }
 ```
 ### Variable Declaration
-```text
+```cobalt
 def main(): int {
     # variable cannot be NULL
     int age = 10
@@ -119,23 +119,23 @@ def main(): int {
 }
 ```
 ### Repeat
-```text
+```cobalt
 def main(): int {
     int h = 0
     repeat 20 {
         h++
-        println(h)
+        println!("{}", &h)
     }
 
     ret 0;
 }
 ```
 ### Forever Loop
-```text
+```cobalt
 def main(): int {
     int h = 0
     forever {
-        println(h)
+        println!("{}", &h)
         if h >= 10 {
             break
         }

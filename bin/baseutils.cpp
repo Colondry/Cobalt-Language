@@ -188,7 +188,7 @@ ExprPtr Parser::parseMultiplicative() {
         });
 }
 
-// Parses a unary expression (-, !, $, &)
+// Parses a unary expression (-, !, $, &, *)
 ExprPtr Parser::parseUnary() {
     if (check(TokenType::Dollar)) { // Move operator '$'
         advance();
@@ -221,6 +221,16 @@ ExprPtr Parser::parseUnary() {
         auto u = std::make_shared<UnaryExpr>();
         u->op = "&";
         u->operand = operand;
+        return u;
+    }
+    if (check(TokenType::Star)) { // Pointer
+        advance();
+        ExprPtr operand = parseUnary();
+
+        if (!operand) reportError("expected an expression after '*'");
+
+        auto u = std::make_shared<UnaryExpr>();
+        u->op = "*"; u->operand = operand;
         return u;
     }
 
@@ -411,6 +421,10 @@ ExprPtr Parser::parsePrimary() {
         auto ref = std::make_shared<NameExpr>();
         ref->name = name;
         return ref;
+    }
+    if (check(TokenType::Star)) {
+        ExprPtr p = parseExpression();
+        return p;
     }
 
     reportError("expected an expression but got '" + peek().text + "'");
