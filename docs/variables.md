@@ -40,4 +40,4 @@ int num2 = &num1
 
 // Compiles cleanly: num1 retains ownership while num2 borrows the reference
 println!("{} and {}", num1, num2)
-```[cite: 2]
+```[cite: 3]

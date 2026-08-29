@@ -40,4 +40,4 @@ Terminal output is managed via the `print!()` and `println!()` macros[cite: 2].
 print!("Hello, ")
 println!("World!")
 // Output: Hello, World!
-```[cite: 3]
+```[cite: 2]
