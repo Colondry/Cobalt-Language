@@ -1,37 +1,43 @@
 # Input & Output
 
-Input and Output is litterally the basics & foumdations of programming language.
-So let's learn about it in Cobalt!
+Input and output utilities serve as the basic foundations for interactive programs in Cobalt[cite: 2].
+
+---
 
 ## Input
-To get user input in cobalt, you can either use `read()` or `readln()`.
-- `read()` is just reading one word that user puts. For example:
+
+User input is captured using `read()` or `readln()`[cite: 2].
+
+* **`read()`**: Reads a single word into a string target[cite: 2].
 
 ```cobalt
 string in = ""
-read("Please put something: " >> in)
-```
+read("Please enter something: " >> in)
+```[cite: 2]
 
-- While `readln()` reads an entire line and you can put a delimiter.
-For example:
+* **`readln()`**: Reads an entire line with optional delimiter support[cite: 2].
 
 ```cobalt
-# No delimiter
+// Standard line read
 string in1 = ""
-readln("Please put some long thing: " >> in1)
+readln("Enter full line: " >> in1)
 
-# With delimiter
+// Read until custom delimiter (e.g., period)
 string in2 = ""
-readln("Please put some long thing: " >> in2, ".")
-```
+readln("Enter sentence: " >> in2, ".")
+```[cite: 2]
+
+---
 
 ## Output
-To prints a text into the terminal, we use `print!()` and `println!()` to outputs text into the terminal.
-- `print!()` is printing your text into the terminal without a newline.
-- While `println!()` is printing your text into the terminal with a newline.
-For Example:
+
+Terminal output is managed via the `print!()` and `println!()` macros[cite: 2].
+
+* **`print!()`**: Prints output without appending a newline[cite: 2].
+* **`println!()`**: Prints output followed by a newline[cite: 2].
+
 ```cobalt
 print!("Hello, ")
-println!("World!") 
-# prints 'Hello, World!'
-```
+println!("World!")
+// Output: Hello, World!
+```[cite: 3]

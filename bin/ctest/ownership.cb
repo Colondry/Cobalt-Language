@@ -1,12 +1,11 @@
-class UserList {
-    public {
-        # Variable Declarations
-        str name = ""
-        int age = 0
-        def getName(): str { ret *name }
-    }
-}
+@import <base>
 def main(): int {
-    try readln("Name: " >> *UserList.name)
-    println!(UserList.getName())
+    auto t1 = __Time__.Now()
+    int num = 0
+    for i in range(0, 100000000) { num++ }
+    auto t2 = __Time__.Now()
+    try println!("The time of 1 Billion loops is {} seconds.", __Time__.Elapsed(*t1, *t2))
+    except println!("An error had just occured.")
+
+    ret 0
 }

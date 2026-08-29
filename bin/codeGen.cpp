@@ -276,6 +276,11 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
             out << "std::unique_ptr<" << fracType << "> " << v->name;
             out << " = " << (v->init ? emitExpr(v->init) : "nullptr") << ";\n";
         }
+        else if (v->type == "auto") {
+            std::string init = emitExpr(v->init);
+            out << "auto " << v->name << " = std::make_unique<std::decay_t<decltype(";
+            out << init << ")>>(" << init << ");\n";
+        }
         else {
             std::string targetType = cppType(v->type);
             out << "std::unique_ptr<" << targetType << "> " << v->name;
@@ -523,6 +528,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <stdfloat>\n\n";
     file << "#include <utility>\n";
     file << "#include <memory>\n";
+    file << "#include <type_traits>\n";
     file << "inline void syncw_stdio(bool s) {\n";
     file << "   std::ios_base::sync_with_stdio(s);\n";
     file << "}\n";

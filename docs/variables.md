@@ -1,40 +1,43 @@
 # Introduction: Variables
 
-Let's do something simple, like variables.
+Variables and memory ownership form the core of Cobalt's variable bindings[cite: 3].
 
 ## Variable Declarations
-Variables in Cobalt are staticly typed which means you have to let the transpiler know what type you're gonna use.
+
+Variables in Cobalt are statically typed, requiring explicit type declarations for transpilation[cite: 3].
 
 ```cobalt
 // Standard variable bindings
 string name = "Cobalt"
 int version = 1
 bool is_active = true
-```
+```[cite: 3]
+
+---
 
 ## Ownership
 
-Cobalt has ownership feature which similar to Rust and in this case, Cobalt uses `std::unique_ptr<>`.
-To change ownership, Cobalt uses `$` symbol. For example:
+Cobalt features an explicit ownership model powered by `std::unique_ptr<>` in C++23[cite: 3]. Ownership transfer is performed using the `$` operator[cite: 3]:
 
 ```cobalt
 int num1 = 10
-int num2 = $num1 # num1 no longer has value of 10 and the num1 value ownership
-                 # is moved into num2
-println!(num1) # ERROR! num1 is a nullptr after loses ownership!
-```
+int num2 = $num1 // Ownership of 10 moves to num2; num1 is invalidated
 
-Cobalt transpiler automaticly detects if the value loses ownership.
+println!(num1)   // ERROR! num1 is now a nullptr/invalid after losing ownership
+```[cite: 3]
+
+The transpiler automatically validates ownership state during code generation[cite: 3].
+
+---
 
 ## Borrow Checker
 
-Cobalt also has a Borrow Checker which again similar to Rust. In order to use other variables value without changing ownership, the borrower is the answer.
-
-To borrow a variable in Cobalt, you would use '&' and followed by the variable name, for example:
+To access a variable's data without taking ownership, use borrowing via the `&` operator[cite: 3]:
 
 ```cobalt
 int num1 = 10
 int num2 = &num1
-println!("{} and {}", num1, num2) # Successfully compiled because num1 ownership stays the same
-                                  # while num2 borrows the value of num1 without changing the owner
-```
+
+// Compiles cleanly: num1 retains ownership while num2 borrows the reference
+println!("{} and {}", num1, num2)
+```[cite: 2]
