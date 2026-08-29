@@ -14,3 +14,10 @@ Welcome to the **Cobalt Language** documentation. Cobalt is a lightweight progra
 ## Map:
 - `Introduction: Variables` : `[https://cobalt-language.readthedocs.io/en/latest/variables.html](https://cobalt-language.readthedocs.io/en/latest/variables.html)`
 - `Input & Output`          : `[https://cobalt-language.readthedocs.io/en/latest/inout.html](https://cobalt-language.readthedocs.io/en/latest/inout.html)`
+
+```{toctree}
+:maxdepth: 2
+:caption: Documentation Contents
+
+variables
+inout

@@ -773,10 +773,7 @@ StmtPtr Parser::parseReadCode() {
     ExprPtr firstOperand = parseLogicalOr();
 
     if (check(TokenType::Shr)) {
-        // input("prompt" >> var), var can be `x` or a member path like `Info.name`
-        advance(); // '>>'
-        stmt->prompt = firstOperand;
-        stmt->target = parsePostfix();
+        stmt->target = parseUnary();
     }
     else if (std::dynamic_pointer_cast<NameExpr>(firstOperand) || std::dynamic_pointer_cast<MemberExpr>(firstOperand)) {
         // input(var) or input(Info.name)
@@ -805,7 +802,7 @@ StmtPtr Parser::parseReadLineCode() {
         // readln("prompt" >> var), var can be `x` or a member path like `Info.name`
         advance(); // '>>'
         stmt->prompt = firstOperand; // any expression is fine as a prompt, not just string literals
-        stmt->target = parsePostfix();
+        stmt->target = parseUnary();
     }
     else if (std::dynamic_pointer_cast<NameExpr>(firstOperand) || std::dynamic_pointer_cast<MemberExpr>(firstOperand)) {
         // readln(var) or readln(Info.name)

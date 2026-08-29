@@ -1,10 +1,8 @@
 class UserList {
-    private {
+    public {
         # Variable Declarations
         str name = ""
         int age = 0
-    }
-    public {
         def getName(): str { ret *name }
     }
 }
