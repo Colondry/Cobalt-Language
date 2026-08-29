@@ -3,18 +3,19 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <stdexcept>
+#include "inf.hpp"
 
 namespace csm {
-    inline void RuntimeError(const char* msg) {
-        std::ios_base::sync_with_stdio(false);
-        fprintf(stderr, "Runtime Error: %s\n", msg);
-        std::exit(EXIT_FAILURE);
-    }
-    inline void RuntimeError(const std::string& msg) {
-        std::ios_base::sync_with_stdio(false);
-        fprintf(stderr, "Runtime Error: %s\n", msg.c_str());
-        std::exit(EXIT_FAILURE);
-    }
+    class CobaltException : public std::runtime_error {
+    public:
+        explicit CobaltException(const std::string& msg) 
+            : std::runtime_error(msg) {}
+    };
+
+    inline void RuntimeError(const char* msg) { std::cout << msg << "\n"; throw CobaltException(msg); }
+    inline void RuntimeException(const char* msg) { std::cout << msg << "\n"; throw CobaltException(msg); }
 }
 
 #endif

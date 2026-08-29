@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include <filesystem>
 
-// ---------- Type tokens ----------
+// ---------- Type tokens ---------
 
 bool Parser::isTypeToken(TokenType t, std::string type) {
     for (const StructCode& sc : program.struc) {
@@ -432,6 +432,21 @@ std::vector<StmtPtr> Parser::parseBlock(std::string retype) {
     popScope();
     return stmts;
 }
+// Example: 'try expression()'
+std::vector<StmtPtr> Parser::parseInlineBlock(std::string retype) {
+    pushScope();
+    std::vector<StmtPtr> stmts;
+
+    // parses statement
+    if (!check(TokenType::Semicolon) && !check(TokenType::EndOfFile)) {
+        StmtPtr s = parseStatement(retype);
+        if (s) stmts.push_back(s);
+    }
+    // consume trailing semicolon if the statement didn't consume it
+    if (check(TokenType::Semicolon)) advance();
+    popScope();
+    return stmts;
+}
 
 StmtPtr Parser::parseVarDecl() {
     if (check(TokenType::List)) {
@@ -687,10 +702,16 @@ StmtPtr Parser::parseForRange() {
 StmtPtr Parser::parseTryExcept() {
     advance(); // 'try'
     auto stmt = std::make_shared<TryExcept>();
-    stmt->tryBody = parseBlock("");
-    expect(TokenType::Except, "except"); // 'except'
-    stmt->exceptCond = parseExpression();
-    stmt->exceptBody = parseBlock("");
+    if (check(TokenType::LBracket)) stmt->tryBody = parseBlock("");
+    else stmt->tryBody = parseInlineBlock("");
+
+    if (match(TokenType::Except)) { // 'except'
+        if (check(TokenType::LParen)) { stmt->exceptCond = parseExpression(); stmt->nec = false; }
+        else stmt->nec = true;
+
+        if (check(TokenType::LBracket)) stmt->exceptBody = parseBlock("");
+        else stmt->exceptBody = parseInlineBlock("");
+    }
     return stmt;
 }
 
@@ -1250,17 +1271,14 @@ AutoUse Parser::parseAutoUse() {
     } else {
         reportError("expected 'module' or 'class' after 'autouse'");
     }
-    Token libName; 
-    if (check(TokenType::Identifier)) libName = expect(TokenType::Identifier, "identifier");
-    else if (check(TokenType::CSM)) libName = expect(TokenType::CSM, "'csm");
-    else reportError("expected an identifier or 'csm'");
+    Token libName= expect(TokenType::Identifier, "identifier");
     autouse.libName = libName.text;
     return autouse;
 }
 
 bool Parser::parsenUse() {
     advance(); // '!use'
-    expect(TokenType::CSM, "csm module");
+    expect(TokenType::Identifier, "identifier");
     if (check(TokenType::Semicolon)) advance();
     return false;
 }

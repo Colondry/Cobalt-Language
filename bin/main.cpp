@@ -32,7 +32,6 @@
 #include "parser.hpp"
 #include "flib.hpp"
 #include "codeGen.hpp"
-#include "Interpreter.hpp"
 #include "libmanage.hpp"
 
 namespace fs = std::filesystem;
@@ -346,8 +345,10 @@ void interpret(const std::string& inputFile, const std::string& outputFile, bool
 }
 
 void InterpretExperimental(const std::string& inputFile, const std::string& outputFile, bool isDeb) {
-    Program program = parseAndGenerate(inputFile, outputFile, isDeb);
-    Interpreter(program);
+    // Program program = parseAndGenerate(inputFile, outputFile, isDeb);
+    // Interpreter(program);
+    std::cout << "Cobalt Interpreter support has been depreceated.\n";
+    std::exit(EXIT_FAILURE);
 }
 
 #include <fstream>

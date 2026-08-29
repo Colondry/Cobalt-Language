@@ -155,7 +155,10 @@ public:
 class TryExcept : public Stmt {
 public:
     std::vector<StmtPtr> tryBody;
+    std::vector<StmtPtr> trybody_su;
+    std::vector<StmtPtr> exceptbody_su;
     ExprPtr exceptCond;
+    bool try_su, nec, except_su;
     std::vector<StmtPtr> exceptBody;
 };
 

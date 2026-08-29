@@ -14,56 +14,109 @@
 #include <string>
 #include <cstddef>
 
+// Smart pointer and borrowed pointer unwraper
+template <typename T>
+decltype(auto) unwrap_val(T&& val) {
+    using Decayed = std::decay_t<T>;
+    
+    // std::unique_ptr / std::shared_ptr
+    if constexpr (requires { val.get(); }) {
+        return val ? *val : typename std::remove_cvref_t<decltype(*val)>{};
+    } 
+    // Raw pointers (excluding string literals / C-strings)
+    else if constexpr (std::is_pointer_v<Decayed>) {
+        using UncvElement = std::remove_cv_t<std::remove_pointer_t<Decayed>>;
+        if constexpr (std::is_same_v<UncvElement, char> || 
+                      std::is_same_v<UncvElement, wchar_t> ||
+                      std::is_same_v<UncvElement, void>) {
+            return std::forward<T>(val); // Keep C-strings and void* as pointers
+        } else {
+            return val ? *val : std::remove_pointer_t<Decayed>{};
+        }
+    } 
+    else {
+        return std::forward<T>(val);
+    }
+}
+// Helper traits to detect std::unique_ptr
+template <typename T>
+struct is_unique_ptr : std::false_type {};
+
+template <typename T, typename Deleter>
+struct is_unique_ptr<std::unique_ptr<T, Deleter>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_unique_ptr_v = is_unique_ptr<std::decay_t<T>>::value;
+
 #if defined(__STDCPP_FLOAT128_T__)
 inline std::ostream& operator<<(std::ostream& os, std::float128_t v) {
     return os << static_cast<long double>(v);
 }
 #endif
 
+// Smart pointer stream overload for direct printing
+template <typename T>
+inline std::ostream& operator<<(std::ostream& os, const std::unique_ptr<T>& ptr) {
+    if (ptr) os << *ptr;
+    else os << "null";
+    return os;
+}
+
 template<typename __L__, typename __R__>
 auto __cadd__(const __L__& l, const __R__& r) {
-    using DecayedL = std::decay_t<__L__>;
-    using DecayedR = std::decay_t<__R__>;
+    decltype(auto) u_l = unwrap_val(l);
+    decltype(auto) u_r = unwrap_val(r);
 
-    // Detect if either operand is string-like (std::string, const char*, c_string)
+    using DecayedL = std::decay_t<decltype(u_l)>;
+    using DecayedR = std::decay_t<decltype(u_r)>;
+
     constexpr bool is_string_op = 
         std::is_convertible_v<DecayedL, std::string> ||
         std::is_convertible_v<DecayedR, std::string>;
 
     if constexpr (is_string_op) [[unlikely]] {
         std::ostringstream __oss__;
-        __oss__ << l << r; // Uses frac's operator<< automatically
+        __oss__ << u_l << u_r;
         return __oss__.str();
     } else [[likely]] {
-        return l + r; // Invokes frac::operator+ or scalar addition
+        return u_l + u_r;
     }
 }
+
 template<typename __L__>
 auto __cadd__(const __L__& l, const __L__& r) {
     return __cadd__<__L__, __L__>(l, r);
 }
-
-template<typename T>
-inline void readln(const std::string& prompt, T& target, char delim = '\n') {
-    std::cout << prompt;
-
-    if constexpr (std::is_same_v<T, std::string>) [[unlikely]] {
-        std::getline(std::cin, target, delim);
-    } else [[likely]] {
-        std::cin >> target;
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), delim);
-    }
-}
-
-template<typename T>
+template <typename T>
 inline void readln(const char* prompt, T& target, char delim = '\n') {
-    std::cout << prompt;
+    if (prompt && prompt[0] != '\0') {
+        std::cout << prompt;
+    }
 
-    if constexpr (std::is_same_v<T, std::string>) [[unlikely]] {
-        std::getline(std::cin, target, delim);
-    } else [[likely]] {
-        std::cin >> target;
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), delim);
+    using DecayedT = std::decay_t<T>;
+
+    auto perform_read = [](auto& val) {
+        std::cin >> val;
+        if (std::cin.fail()) {
+            std::cin.clear(); // Clear the fail state
+            std::cin.ignore(10000, '\n'); // Flush the invalid characters ('j') from buffer
+            
+            // Set arithmetic types to a value or state indicating failure if needed
+            if constexpr (std::is_arithmetic_v<std::decay_t<decltype(val)>>) {
+                std::exit(EXIT_FAILURE);
+            }
+        }
+    };
+
+    if constexpr (is_unique_ptr_v<DecayedT>) {
+        if (!target) {
+            target = std::make_unique<typename DecayedT::element_type>();
+        }
+        perform_read(*target);
+    } else if constexpr (std::is_pointer_v<DecayedT>) {
+        if (target) perform_read(*target);
+    } else {
+        perform_read(target);
     }
 }
 
@@ -83,13 +136,9 @@ struct frac {
     T1 first{};
     T2 second{1}; // Prevent division by zero default
 
-    // --- Constructors ---
     constexpr frac() = default;
-    constexpr frac(T1 f) : first(std::move(f)), second(1) {}
-    constexpr frac(T1 f, T2 s) : first(std::move(f)), second(std::move(s)) {
-        normalize_sign();
-        simplify(*this);
-    }
+    constexpr frac(T1 f) : first(unwrap_val(f)), second(1) {}
+    constexpr frac(T1 f, T2 s) : first(unwrap_val(f)), second(unwrap_val(s)) {}
 
     // --- Explicit Conversions ---
     constexpr operator std::pair<T1, T2>() const {
@@ -274,15 +323,50 @@ inline std::istream& operator>>(std::istream& is, __cobalt_byte__& b) {
 // Type alias so both __byte__ and __cobalt_byte__ refer to the same type
 using __byte__ = __cobalt_byte__;
 
-template<typename... Args>
-inline void println_c(std::string_view fmt, Args&&... args) {
-    std::cout << std::vformat(fmt, std::make_format_args(args...)) << '\n';
+// No-argument println (empty line)
+inline void println_c() {
+    std::cout << '\n';
 }
 
-template<typename... Args>
-inline void print_c(std::string_view fmt, Args&&... args) {
-    std::cout << std::vformat(fmt, std::make_format_args(args...));
+// Single-argument printing (handles values, smart pointers, & borrowed pointers)
+template <typename T>
+inline void println_c(T&& val) {
+    std::cout << unwrap_val(val) << '\n';
 }
+
+template <typename T>
+inline void print_c(T&& val) {
+    std::cout << unwrap_val(val);
+}
+
+inline void println_c(std::string_view fmt) {
+    std::cout << fmt << '\n';
+}
+
+// Variadic overload that materializes unwrapped values as named lvalues
+template <typename... Args>
+inline void println_c(std::string_view fmt, Args&&... args) {
+    auto print_helper = [&](auto&&... unwrapped_args) {
+        std::cout << std::vformat(fmt, std::make_format_args(unwrapped_args...)) << '\n';
+    };
+
+    print_helper(unwrap_val(std::forward<Args>(args))...);
+}
+
+inline void print_c(std::string_view fmt) {
+    std::cout << fmt;
+}
+
+// Variadic overload that materializes unwrapped values as named lvalues
+template <typename... Args>
+inline void print_c(std::string_view fmt, Args&&... args) {
+    auto print_helper = [&](auto&&... unwrapped_args) {
+        std::cout << std::vformat(fmt, std::make_format_args(unwrapped_args...));
+    };
+
+    print_helper(unwrap_val(std::forward<Args>(args))...);
+}
+
 #include <cstring>
 #include <cstddef>
 
@@ -368,18 +452,44 @@ struct c_string {
     c_string(const c_string& other) {
         assign(other.data);
     }
-	
-	operator std::string() const {
-		return std::string(data, length);
-	}
 
-    // 5. Assignment Operator (const char*)
+    // 5. String View Constructor
+    c_string(std::string_view sv) {
+        length = std::min(sv.size(), MAX_SIZE - 1);
+        std::memcpy(data, sv.data(), length);
+        data[length] = '\0';
+    }
+
+    // 6. Integer & Numeric Constructors (Fixes make_unique<c_string>(0))
+    c_string(int val) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%d", val);
+        assign(buf);
+    }
+
+    c_string(long long val) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%lld", val);
+        assign(buf);
+    }
+
+    // Conversions
+    operator std::string() const {
+        return std::string(data, length);
+    }
+
+    operator std::string_view() const {
+        return std::string_view(data, length);
+    }
+
+    operator const char*() const { return data; }
+
+    // Assignment Operators
     c_string& operator=(const char* str) {
         assign(str);
         return *this;
     }
 
-    // 6. Assignment Operator (c_string)
     c_string& operator=(const c_string& other) {
         if (this != &other) {
             assign(other.data);
@@ -387,7 +497,14 @@ struct c_string {
         return *this;
     }
 
-    // 7. Concatenation Operator
+    c_string& operator=(std::string_view sv) {
+        length = std::min(sv.size(), MAX_SIZE - 1);
+        std::memcpy(data, sv.data(), length);
+        data[length] = '\0';
+        return *this;
+    }
+
+    // Concatenation Operator
     c_string operator+(const c_string& other) const {
         c_string result = *this;
         if (result.length + other.length < MAX_SIZE) {
@@ -397,10 +514,7 @@ struct c_string {
         return result;
     }
 
-    // 8. Implicit Conversion to `const char*`
-    operator const char*() const { return data; }
-
-    // 9. Array Indexing
+    // Array Indexing
     char& operator[](size_t index) { return data[index]; }
     const char& operator[](size_t index) const { return data[index]; }
 
@@ -410,6 +524,19 @@ struct c_string {
     }
     bool operator==(const char* str) const {
         return str && std::strcmp(data, str) == 0;
+    }
+
+    // Stream Operators
+    friend std::ostream& operator<<(std::ostream& os, const c_string& str) {
+        return os << str.data;
+    }
+
+    friend std::istream& operator>>(std::istream& is, c_string& str) {
+        std::string temp;
+        if (is >> temp) {
+            str.assign(temp.c_str());
+        }
+        return is;
     }
 
 private:
@@ -426,18 +553,6 @@ private:
     }
 };
 
-// Stream Operators
-inline std::ostream& operator<<(std::ostream& os, const c_string& str) {
-    return os << str.data;
-}
-
-inline std::istream& operator>>(std::istream& is, c_string& str) {
-    std::string temp;
-    if (is >> temp) {
-        str = temp.c_str();
-    }
-    return is;
-}
 
 // std::formatter specialization
 template <>

@@ -304,7 +304,7 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         return;
     }
 
-    // Print statements dereference values to avoid printing raw memory addresses
+    /* PRINT DEPRECEATED
     if (auto p = std::dynamic_pointer_cast<PrintCode>(stmt)) {
         out << indent(depth) << "std::cout";
         if (p->value) {
@@ -314,6 +314,8 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << ";\n";
         return;
     }
+   */
+
     if (auto t = std::dynamic_pointer_cast<TypeDecl>(stmt)) {
         out << indent(depth) << emitTypeDeclLine(*t);
         return;
@@ -360,12 +362,38 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         return;
     }
     if (auto te = std::dynamic_pointer_cast<TryExcept>(stmt)) {
-        out << indent(depth) << "{\n";
-        emitBlock(te->tryBody, depth+1, out);
+        // Reset status flag before execution so prior errors don't carry over
+        if (!te->nec) {
+            out << indent(depth) << "cobalt__try_status__ = 0;\n";
+        }
+
+        // Emit Try Body
+        out << indent(depth) << "try {\n";
+        emitBlock(te->tryBody, depth + 1, out);
         out << indent(depth) << "}\n";
-        out << indent(depth) << "if (" << emitExpr(te->exceptCond) << ") {\n";
-        emitBlock(te->exceptBody, depth+1, out);
-        out << indent(depth) << "}\n";
+
+        // Emit Exception Handling
+        if (!te->nec) {
+            // Conditional Status Handling
+            out << indent(depth) << "catch (const std::exception& e) {\n";
+            out << indent(depth + 1) << "cobalt__try_status__ = 1;\n";
+            out << indent(depth) << "} catch (...) {\n";
+            out << indent(depth + 1) << "cobalt__try_status__ = 1;\n";
+            out << indent(depth) << "}\n";
+
+            // Evaluate condition after trapped execution
+            out << indent(depth) << "if (" << emitExpr(te->exceptCond) << ") {\n";
+            emitBlock(te->exceptBody, depth + 1, out);
+            out << indent(depth) << "}\n";
+        } 
+        else {
+            // Standard Catch-All
+            out << indent(depth) << "catch (const std::exception& e) {\n";
+            emitBlock(te->exceptBody, depth + 1, out);
+            out << indent(depth) << "} catch (...) {\n";
+            emitBlock(te->exceptBody, depth + 1, out);
+            out << indent(depth) << "}\n";
+        }
         return;
     }
     if (auto e = std::dynamic_pointer_cast<ElifStmt>(stmt)) {
@@ -483,6 +511,8 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "inline void syncw_stdio(bool s) {\n";
     file << "   std::ios_base::sync_with_stdio(s);\n";
     file << "}\n";
+    file << "inline thread_local int cobalt__try_status__ = 0;\n";
+    file << "inline int TryStatus() { return cobalt__try_status__; }";
 
     file << "\n";
 
@@ -524,7 +554,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         if (headerPath.empty()) file << "#include \"" << imp.libName << ".hpp\"\n";
         else file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
     }
-    if (program.use_built) { // not using '!use builtin'
+    if (program.use_built) { // not using '!use csm'
         file << "#include <csystem.hpp>\n";
         file << "#include <cotype.hpp>\n";
         file << "#include <fsys.hpp>\n";

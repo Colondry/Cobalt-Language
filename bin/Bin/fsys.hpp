@@ -5,27 +5,38 @@
 #include <fstream>
 #include <cstdio>
 #include "errors.hpp"
+#include "inf.hpp"
 
 namespace csm {
     namespace fs = std::filesystem;
-    inline void crdir(const fs::path& path) {
-        fs::create_directories(path);
+
+    template <typename T>
+    inline void crdir(const T& path) {
+        fs::create_directories(unwrap_val(path));
     }
-    bool nwfile(const char* path) {
-        std::FILE* fptr = std::fopen(path, "w");
+
+    template <typename T>
+    bool nwfile(const T& path) {
+        decltype(auto) u_path = unwrap_val(path);
+        std::FILE* fptr = std::fopen(u_path, "w");
         if (!fptr) return false;
         std::fclose(fptr);
         return true;
     }
-    inline std::FILE* fopen(const char* path, const char* mode = "w") {
-        return std::fopen(path, mode);
+
+    template <typename T1, typename T2>
+    inline std::FILE* fopen(const T1& path, const T2& mode) {
+        return std::fopen(unwrap_val(path), unwrap_val(mode));
     }
-    inline void fwrite(std::FILE* file, const char* text) {
-        if (file && text) std::fputs(text, file);
+
+    template <typename T>
+    inline void fwrite(std::FILE* file, const T& text) {
+        if (file) std::fputs(unwrap_val(text), file);
     }
+
     inline void fclose(std::FILE* file) {
-        std::fclose(file);
+        if (file) std::fclose(file);
     }
 }
 
-#endif // FSYS_HPP
+#endif

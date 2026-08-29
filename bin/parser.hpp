@@ -8,6 +8,8 @@
 #include <functional>
 #include <unordered_set>
 
+enum class VariableState { Active, Moved };
+
 class Parser
 {
 public:
@@ -29,6 +31,33 @@ private:
 
     size_t current = 0;
     std::unordered_set<std::string> ctypeNames; // names introduced via 'ctype'
+
+    std::vector<std::unordered_map<std::string, VariableState>> scopes;
+
+    void pushScope() { scopes.push_back({}); }
+    void popScope() { if (!scopes.empty()) scopes.pop_back(); }
+
+    void declareVar(const std::string& name) {
+        if (!scopes.empty()) scopes.back()[name] = VariableState::Active;
+    }
+
+    VariableState getVarState(const std::string& name) {
+        for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
+            auto found = it->find(name);
+            if (found != it->end()) return found->second;
+        }
+        return VariableState::Active; // Fallback for globals/members
+    }
+
+    void setVarState(const std::string& name, VariableState state) {
+        for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
+            auto found = it->find(name);
+            if (found != it->end()) {
+                found->second = state;
+                return;
+            }
+        }
+    }
 
     // ---------- Core cursor / matching infra (defined in parser.cpp) ----------
     const Token& peek() const;
@@ -63,6 +92,7 @@ private:
 
     // ---------- Statements (baseutils.cpp) ----------
     std::vector<StmtPtr> parseBlock(std::string retype);
+    std::vector<StmtPtr> parseInlineBlock(std::string retype);
     std::vector<StmtPtr> parseCFBlock(std::string retype);
     std::vector<StmtPtr> parseSFBlock();
     void parseSBlock(StructCode& str);

@@ -1,0 +1,4 @@
+def main() {
+    try println!("Hello, World!")
+    ret 0
+}

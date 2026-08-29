@@ -4,17 +4,30 @@
 #include "inf.hpp"
 #include <cstring>
 #include <cstddef>
+#include <utility>
+#include <type_traits>
 
 namespace csm {
-	[[nodiscard]] inline std::size_t strlen(const c_string& str) noexcept {
-		const char* ptr = static_cast<const char*>(str);
+	// Templated strlen to automatically unwrap unique_ptr<c_string> and c_string*
+	template <typename T>
+	[[nodiscard]] inline std::size_t strlen(T&& str) noexcept {
+		decltype(auto) u_str = unwrap_val(std::forward<T>(str));
+		const char* ptr = static_cast<const char*>(u_str);
 		return ptr ? std::strlen(ptr) : 0;
 	} 
-	inline bool checkstr(const c_string& src, const char* target) {
-		return src == target;
+
+	template <typename T1, typename T2>
+	inline bool checkstr(T1&& src, T2&& target) {
+		return unwrap_val(std::forward<T1>(src)) == unwrap_val(std::forward<T2>(target));
 	}
-	inline bool checkchr(const char* src, const char* target) { return src == target; }
-	c_string strip(c_string& src, const char* target) {
+
+	template <typename T1, typename T2>
+	inline bool checkchr(T1&& src, T2&& target) { 
+		return unwrap_val(std::forward<T1>(src)) == unwrap_val(std::forward<T2>(target)); 
+	}
+
+	// Internal implementation for in-place string stripping
+	inline c_string strip_impl(c_string& src, const char* target) {
 		if (src.length == 0 || !target || target[0] == '\0') {
 			return c_string("");
 		}
@@ -22,13 +35,11 @@ namespace csm {
 		size_t target_len = std::strlen(target);
 		int pos = src.find(target, target_len, 0);
 		if (pos == -1) {
-			return c_string(""); // Target not found
+			return c_string("");
 		}
 
-		// 1. Capture the removed word to return
 		c_string removed(src.data + pos, target_len);
 
-		// 2. Erase target from 'src' in-place by shifting remaining bytes left
 		size_t tail_len = src.length - (pos + target_len);
 		if (tail_len > 0) {
 			std::memmove(src.data + pos, src.data + pos + target_len, tail_len);
@@ -39,11 +50,20 @@ namespace csm {
 		return removed;
 	}
 
-	// Overload for c_string target
-	c_string strip(c_string& src, const c_string& target) {
-		return strip(src, target.data);
+	template <typename T1, typename T2>
+	inline c_string strip(T1&& src, T2&& target) {
+		decltype(auto) u_src = unwrap_val(std::forward<T1>(src));
+		decltype(auto) u_target = unwrap_val(std::forward<T2>(target));
+		
+		if constexpr (std::is_convertible_v<decltype(u_target), const char*>) {
+			return strip_impl(u_src, static_cast<const char*>(u_target));
+		} else {
+			return strip_impl(u_src, u_target.data);
+		}
 	}
-	c_string replace(const c_string& src, const char* target, const char* replacement = "") {
+
+	// Internal implementation for string replacement
+	inline c_string replace_impl(const c_string& src, const char* target, const char* replacement = "") {
 		if (src.length == 0 || !target || target[0] == '\0') {
 			return src;
 		}
@@ -52,20 +72,18 @@ namespace csm {
 		size_t repl_len = replacement ? std::strlen(replacement) : 0;
 
 		int pos = src.find(target, target_len, 0);
-		if (pos == -1) return src; // Target not found
+		if (pos == -1) return src;
 
 		c_string result;
 		size_t src_idx = 0;
 		size_t res_idx = 0;
 
 		while (pos != -1 && res_idx < c_string::MAX_SIZE - 1) {
-			// Copy segment before match
 			size_t segment_len = pos - src_idx;
 			if (res_idx + segment_len >= c_string::MAX_SIZE - 1) break;
 			std::memcpy(result.data + res_idx, src.data + src_idx, segment_len);
 			res_idx += segment_len;
 
-			// Copy replacement text
 			if (repl_len > 0) {
 				if (res_idx + repl_len >= c_string::MAX_SIZE - 1) break;
 				std::memcpy(result.data + res_idx, replacement, repl_len);
@@ -76,7 +94,6 @@ namespace csm {
 			pos = src.find(target, target_len, src_idx);
 		}
 
-		// Copy remaining tail
 		if (src_idx < src.length && res_idx < c_string::MAX_SIZE - 1) {
 			size_t tail_len = src.length - src_idx;
 			if (res_idx + tail_len >= c_string::MAX_SIZE - 1) {
@@ -90,8 +107,22 @@ namespace csm {
 		result.length = res_idx;
 		return result;
 	}
-	inline c_string erasestr(c_string& src, const c_string& word) {
-		return replace(src, word, "");
+
+	template <typename T1, typename T2, typename T3 = const char*>
+	inline c_string replace(T1&& src, T2&& target, T3&& replacement = "") {
+		decltype(auto) u_src = unwrap_val(std::forward<T1>(src));
+		decltype(auto) u_target = unwrap_val(std::forward<T2>(target));
+		decltype(auto) u_repl = unwrap_val(std::forward<T3>(replacement));
+
+		const char* target_ptr = static_cast<const char*>(u_target);
+		const char* repl_ptr = static_cast<const char*>(u_repl);
+
+		return replace_impl(u_src, target_ptr, repl_ptr);
+	}
+
+	template <typename T1, typename T2>
+	inline c_string erasestr(T1&& src, T2&& word) {
+		return replace(std::forward<T1>(src), std::forward<T2>(word), "");
 	}
 }
 
