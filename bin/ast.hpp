@@ -159,6 +159,7 @@ public:
     std::vector<StmtPtr> exceptbody_su;
     ExprPtr exceptCond;
     bool try_su = false, nec = false, except_su = false;
+    bool hasExcept = false; // true only if an 'except' clause was actually written
     std::vector<StmtPtr> exceptBody;
 };
 

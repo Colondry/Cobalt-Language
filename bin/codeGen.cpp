@@ -183,7 +183,7 @@ static std::string emitExpr(const ExprPtr& e) {
     }
 
     if (auto mem = std::dynamic_pointer_cast<MethodMemberExpr>(e)) {
-        return emitExpr(mem->object) + "." + mem->member;
+        return emitExpr(mem->object) + "::" + mem->member;
     }
 
     throw std::runtime_error("Unknown expression.");
@@ -365,7 +365,7 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto te = std::dynamic_pointer_cast<TryExcept>(stmt)) {
         // Reset status flag before execution so prior errors don't carry over
-        if (!te->nec) {
+        if (te->hasExcept && !te->nec) {
             out << indent(depth) << "cobalt__try_status__ = 0;\n";
         }
 
@@ -374,8 +374,12 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         emitBlock(te->tryBody, depth + 1, out);
         out << indent(depth) << "}\n";
 
+        if (!te->hasExcept) {
+            // Bare 'try' with no 'except' clause at all -- just swallow the exception.
+            out << indent(depth) << "catch (...) {}\n";
+        }
         // Emit Exception Handling
-        if (!te->nec) {
+        else if (!te->nec) {
             // Conditional Status Handling
             out << indent(depth) << "catch (const std::exception& e) {\n";
             out << indent(depth + 1) << "cobalt__try_status__ = 1;\n";

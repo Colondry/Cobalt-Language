@@ -392,7 +392,7 @@ void listsLib() {
     }
 }
 
-int main(int argc, char* argv[]) {
+int cobaltMain(int argc, char* argv[]) {
     setExecutablePath(argv[0]);
 
     std::string inputFile;
@@ -800,4 +800,16 @@ Options:
     }
 
     return 0;
+}
+
+int main(int argc, char* argv[]) {
+    try {
+        return cobaltMain(argc, argv);
+    } catch (const std::exception& e) {
+        std::cerr << "Internal compiler error: " << e.what() << "\n";
+        return 1;
+    } catch (...) {
+        std::cerr << "Internal compiler error: unknown exception.\n";
+        return 1;
+    }
 }

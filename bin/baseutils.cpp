@@ -706,6 +706,7 @@ StmtPtr Parser::parseTryExcept() {
     else stmt->tryBody = parseInlineBlock("");
 
     if (match(TokenType::Except)) { // 'except'
+        stmt->hasExcept = true;
         if (check(TokenType::LParen)) { stmt->exceptCond = parseExpression(); stmt->nec = false; }
         else stmt->nec = true;
 
