@@ -702,14 +702,14 @@ StmtPtr Parser::parseForRange() {
 StmtPtr Parser::parseTryExcept() {
     advance(); // 'try'
     auto stmt = std::make_shared<TryExcept>();
-    if (check(TokenType::LBracket)) stmt->tryBody = parseBlock("");
+    if (check(TokenType::LBrace)) stmt->tryBody = parseBlock("");
     else stmt->tryBody = parseInlineBlock("");
 
     if (match(TokenType::Except)) { // 'except'
         if (check(TokenType::LParen)) { stmt->exceptCond = parseExpression(); stmt->nec = false; }
         else stmt->nec = true;
 
-        if (check(TokenType::LBracket)) stmt->exceptBody = parseBlock("");
+        if (check(TokenType::LBrace)) stmt->exceptBody = parseBlock("");
         else stmt->exceptBody = parseInlineBlock("");
     }
     return stmt;
@@ -909,6 +909,7 @@ TypeDecl Parser::parseNCType() {
 
 std::vector<StmtPtr> Parser::parseCFBlock(std::string retype) {
     expect(TokenType::LBrace, "{");
+    pushScope();
     std::vector<StmtPtr> stmts;
     while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
         StmtPtr s = parseStatement(retype);
@@ -923,6 +924,7 @@ std::vector<StmtPtr> Parser::parseCFBlock(std::string retype) {
             advance();
         }
     }
+    popScope();
     return stmts;
 }
 std::vector<StmtPtr> Parser::parseSFBlock() {
@@ -952,11 +954,13 @@ StmtPtr Parser::parseCFunction() {
     CFuncDecl fn;
     auto fnd = std::make_shared<CFDecl>();
     fn.name = nameTok.text; fnd->name = nameTok.text;
+    pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
     if (!check(TokenType::RParen)) {
         do {
             Param p;
             p.type = expectType();
             p.name = expect(TokenType::Identifier, "parameter name").text;
+            declareVar(p.name);
             fn.params.push_back(p); fnd->params.push_back(p);
         } while (match(TokenType::Comma));
     }
@@ -976,6 +980,7 @@ StmtPtr Parser::parseCFunction() {
     fnd->returnType = fn.returnType;
     fnd->body = parseCFBlock(fn.returnType);
     fn.body = fnd->body;
+    popScope();
 
     return fnd;
 }
@@ -988,11 +993,13 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
     LambFuncDecl fn;
     auto fnd = std::make_shared<LambFuncDecl>();
     fn.name = nameTok.text; fnd->name = nameTok.text;
+    pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
     if (!check(TokenType::RParen)) {
         do {
             Param p;
             p.type = expectType();
             p.name = expect(TokenType::Identifier, "parameter name").text;
+            declareVar(p.name);
             fn.params.push_back(p); fnd->params.push_back(p);
         } while (match(TokenType::Comma));
     }
@@ -1012,6 +1019,7 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
     fnd->returnType = fn.returnType;
     fnd->body = parseCFBlock(fn.returnType);
     fn.body = fnd->body;
+    popScope();
 
     return fnd;
 }
@@ -1196,11 +1204,13 @@ FunctionDecl Parser::parseFunction() {
 
     FunctionDecl fn;
     fn.name = nameTok.text;
+    pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
     if (!check(TokenType::RParen)) {
         do {
             Param p;
             p.type = expectType();
             p.name = expect(TokenType::Identifier, "parameter name").text;
+            declareVar(p.name);
             fn.params.push_back(p);
         } while (match(TokenType::Comma));
     }
@@ -1218,6 +1228,7 @@ FunctionDecl Parser::parseFunction() {
         }
     }
     fn.body = parseBlock(fn.returnType);
+    popScope();
     return fn;
 }
 

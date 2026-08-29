@@ -143,7 +143,9 @@ static std::string emitExpr(const ExprPtr& e) {
         std::string out = call->callee + "(";
         for (size_t i = 0; i < call->args.size(); i++) {
             if (i) out += ", ";
-            out += emitExpr(call->args[i]);
+            // Parameters are plain T while locals are std::unique_ptr<T>; unwrap so the
+            // argument's runtime type actually matches what the callee expects.
+            out += "unwrap_val(" + emitExpr(call->args[i]) + ")";
         }
         return out + ")";
     }
@@ -181,7 +183,7 @@ static std::string emitExpr(const ExprPtr& e) {
     }
 
     if (auto mem = std::dynamic_pointer_cast<MethodMemberExpr>(e)) {
-        return emitExpr(mem->object) + "::" + mem->member;
+        return emitExpr(mem->object) + "." + mem->member;
     }
 
     throw std::runtime_error("Unknown expression.");

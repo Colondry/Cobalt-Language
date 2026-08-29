@@ -158,7 +158,7 @@ public:
     std::vector<StmtPtr> trybody_su;
     std::vector<StmtPtr> exceptbody_su;
     ExprPtr exceptCond;
-    bool try_su, nec, except_su;
+    bool try_su = false, nec = false, except_su = false;
     std::vector<StmtPtr> exceptBody;
 };
 
