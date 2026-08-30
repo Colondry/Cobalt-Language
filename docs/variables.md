@@ -98,9 +98,9 @@ println!("{} and {}", num1, num2)
 * **Owner Retention**: Borrowing with `&` leaves the original variable (`num1`) fully valid and active.
 * **Lifetime Constraints**: Borrowed references must not outlive the owner's valid scope.
 
-## Constants `const`
+## Constants 
 There a two type of constants, the normal constant (`const`) and the constant pointer (`const_ptr`).
-### Constant
+### Constant `const`
 Constant is a variable that cannot be moved or changed it's ownership while it's value can still be modified. 
 For example:
 
