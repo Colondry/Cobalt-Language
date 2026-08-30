@@ -264,26 +264,29 @@ static void emitBlock(const std::vector<StmtPtr>& body, int depth, std::ofstream
 
 static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     if (auto v = std::dynamic_pointer_cast<VarDecl>(stmt)) {
-        out << indent(depth);
+        if (v->c) out << indent(depth) << "const ";
+        else out << indent(depth);
+
+        std::string cptr = v->cptr ? "const " : "";
 
         if (v->type == "List") {
             std::string vecType = "std::vector<" + cppType(v->elemType) + ">";
-            out << "std::unique_ptr<" << vecType << "> " << v->name;
+            out << "std::unique_ptr<" << cptr << vecType << "> " << v->name;
             out << " = " << (v->init ? emitExpr(v->init) : "nullptr") << ";\n";
         }
         else if (v->type == "Fraction") {
             std::string fracType = "frac<" + cppType(v->elemType) + ", " + cppType(v->secElemType) + ">";
-            out << "std::unique_ptr<" << fracType << "> " << v->name;
+            out << "std::unique_ptr<" << cptr << fracType << "> " << v->name;
             out << " = " << (v->init ? emitExpr(v->init) : "nullptr") << ";\n";
         }
         else if (v->type == "auto") {
             std::string init = emitExpr(v->init);
-            out << "auto " << v->name << " = std::make_unique<std::decay_t<decltype(";
-            out << init << ")>>(" << init << ");\n";
+            out << "auto " << v->name << " = std::make_unique<" 
+                << cptr << "std::decay_t<decltype(" << init << ")>>(" << init << ");\n";
         }
         else {
             std::string targetType = cppType(v->type);
-            out << "std::unique_ptr<" << targetType << "> " << v->name;
+            out << "std::unique_ptr<" << cptr << targetType << "> " << v->name;
             out << " = " << emitInitExpr(targetType, v->init) << ";\n";
         }
         return;

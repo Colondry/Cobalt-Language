@@ -437,18 +437,21 @@ ExprPtr Parser::parsePrimary() {
 std::vector<StmtPtr> Parser::parseBlock(std::string retype) {
     expect(TokenType::LBrace, "{");
     pushScope();
+    pushConst();
     std::vector<StmtPtr> stmts;
     while (!check(TokenType::RBrace) && !check(TokenType::EndOfFile)) {
         StmtPtr s = parseStatement(retype);
         if (s) stmts.push_back(s);
     }
     expect(TokenType::RBrace, "}");
+    popConst();
     popScope();
     return stmts;
 }
 // Example: 'try expression()'
 std::vector<StmtPtr> Parser::parseInlineBlock(std::string retype) {
     pushScope();
+    pushConst();
     std::vector<StmtPtr> stmts;
 
     // parses statement
@@ -458,21 +461,31 @@ std::vector<StmtPtr> Parser::parseInlineBlock(std::string retype) {
     }
     // consume trailing semicolon if the statement didn't consume it
     if (check(TokenType::Semicolon)) advance();
+    popConst();
     popScope();
     return stmts;
 }
 
-StmtPtr Parser::parseVarDecl() {
+StmtPtr Parser::parseVarDecl(int c) {
+    auto decl = std::make_shared<VarDecl>();
+    decl->c = false; decl->cptr = false;
+    switch (c) {
+        case 0: break;
+        case 1: decl->c = true; break;
+        case 2: decl->cptr = true; break;
+        default: reportError("unknown panic! {404}");
+    }
+    if (check(TokenType::Constant)) advance();
+    if (check(TokenType::ConstantPtr)) advance();
     if (check(TokenType::List)) {
         advance(); // 'List'
-        auto decl = std::make_shared<VarDecl>();
         decl->type = "List";
         expect(TokenType::Lt, "<");
         decl->elemType = expectType();
         expect(TokenType::Gt, ">");
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
-        declareVar(decl->name);
+        declareVar(decl->name, c);
 
         if (match(TokenType::Assign)) {
             expect(TokenType::LBracket, "[");
@@ -501,7 +514,6 @@ StmtPtr Parser::parseVarDecl() {
     }
     else if (check(TokenType::TypeFrac)) {
         advance(); // 'frac'
-        auto decl = std::make_shared<VarDecl>();
         decl->type = "Fraction";
         expect(TokenType::Lt, "<");
         decl->elemType = expectType();
@@ -515,7 +527,7 @@ StmtPtr Parser::parseVarDecl() {
         expect(TokenType::Gt, ">");
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
-        declareVar(decl->name);
+        declareVar(decl->name, c);
 
         if (match(TokenType::Assign)) {
             expect(TokenType::LBracket, "[");
@@ -554,29 +566,19 @@ StmtPtr Parser::parseVarDecl() {
     else if (check(TokenType::TypeVoid)) {
         reportError("variable type cannot be void.");
     }
-    auto decl = std::make_shared<VarDecl>();
     decl->type = expectType();
     Token nameTok = expect(TokenType::Identifier, "variable name");
     decl->name = nameTok.text;
-    declareVar(decl->name);
+    declareVar(decl->name, c);
 
     if (match(TokenType::LBracket)) {
         Token sizeTok = expect(TokenType::Number, "array size");
         decl->arraySize = std::atoi(sizeTok.text.c_str());
         expect(TokenType::RBracket, "]");
     }
-    if (match(TokenType::Assign)) {
-        decl->init = parseExpression();
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
-    }
-    else {
-        reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
-    }
+    if (match(TokenType::Assign)) decl->init = parseExpression();
+    else reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
+    if (check(TokenType::Semicolon)) advance();
     return decl;
 }
 
@@ -922,6 +924,7 @@ TypeDecl Parser::parseNCType() {
 std::vector<StmtPtr> Parser::parseCFBlock(std::string retype) {
     expect(TokenType::LBrace, "{");
     pushScope();
+    pushConst();
     std::vector<StmtPtr> stmts;
     while (!check(TokenType::RBrace) && !check(TokenType::SClose) && !check(TokenType::EndOfFile)) {
         StmtPtr s = parseStatement(retype);
@@ -936,6 +939,7 @@ std::vector<StmtPtr> Parser::parseCFBlock(std::string retype) {
             advance();
         }
     }
+    popConst();
     popScope();
     return stmts;
 }
@@ -967,6 +971,7 @@ StmtPtr Parser::parseCFunction() {
     auto fnd = std::make_shared<CFDecl>();
     fn.name = nameTok.text; fnd->name = nameTok.text;
     pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
+    pushConst();
     if (!check(TokenType::RParen)) {
         do {
             Param p;
@@ -992,6 +997,7 @@ StmtPtr Parser::parseCFunction() {
     fnd->returnType = fn.returnType;
     fnd->body = parseCFBlock(fn.returnType);
     fn.body = fnd->body;
+    popConst();
     popScope();
 
     return fnd;
@@ -1038,6 +1044,9 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
 
 StmtPtr Parser::parseStatement(std::string retype) {
     if (looksLikeVarDecl()) return parseVarDecl();
+    if (check(TokenType::Constant)) return parseVarDecl(1); // const
+    if (check(TokenType::ConstantPtr)) return parseVarDecl(2); // const_ptr
+    if (check(TokenType::Semicolon)) advance();
     if (check(TokenType::Ret)) return parseReturn(retype);
     if (check(TokenType::Lambda)) return parseLambdaFn(retype);
     if (check(TokenType::If)) return parseIf();
@@ -1065,6 +1074,9 @@ StmtPtr Parser::parseStatement(std::string retype) {
 
 StmtPtr Parser::parseSStr() {
     if (looksLikeVarDecl()) return parseVarDecl();
+    if (check(TokenType::Constant)) return parseVarDecl(1); // const
+    if (check(TokenType::ConstantPtr)) return parseVarDecl(2); // const_ptr
+    if (check(TokenType::Semicolon)) advance();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||
         check(TokenType::If) || check(TokenType::Elif) ||
@@ -1083,6 +1095,9 @@ StmtPtr Parser::parseSStr() {
 
 StmtPtr Parser::parseSClass() {
     if (looksLikeVarDecl()) return parseVarDecl();
+    if (check(TokenType::Constant)) return parseVarDecl(1); // const
+    if (check(TokenType::ConstantPtr)) return parseVarDecl(2); // const_ptr
+    if (check(TokenType::Semicolon)) advance();
     if (check(TokenType::Fn)) return parseCFunction();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||
         check(TokenType::If) || check(TokenType::Elif) ||

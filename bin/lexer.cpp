@@ -18,7 +18,8 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"read", TokenType::Read}, {"readln", TokenType::ReadLine},
     {"continue", TokenType::Continue}, {"break", TokenType::Break},
     {"clear", TokenType::Clear}, {"ctype", TokenType::CType},
-    {"notuse", TokenType::nUse},
+    {"notuse", TokenType::nUse}, {"const", TokenType::Constant},
+    {"const_ptr", TokenType::ConstantPtr},
     {"try", TokenType::Try}, {"except", TokenType::Except},
 
     // Operators

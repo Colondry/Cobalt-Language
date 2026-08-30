@@ -1,11 +1,7 @@
 @import <base>
 def main(): int {
-    auto t1 = __Time__.Now()
-    int num = 0
-    for i in range(0, 100000000) { num++ }
-    auto t2 = __Time__.Now()
-    try println!("The time of 1 Billion loops is {} seconds.", __Time__.Elapsed(*t1, *t2))
-    except println!("An error had just occured.")
-
+    const int k = 80
+    int o = k
+    println!("{}, {}", &k, o)
     ret 0
 }

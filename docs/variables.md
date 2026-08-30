@@ -98,8 +98,22 @@ println!("{} and {}", num1, num2)
 * **Owner Retention**: Borrowing with `&` leaves the original variable (`num1`) fully valid and active.
 * **Lifetime Constraints**: Borrowed references must not outlive the owner's valid scope.
 
+## Constants `const`
+There a two type of constants, the normal constant (`const`) and the constant pointer (`const_ptr`).
+### Constant
+Constant is a variable that cannot be moved or changed it's ownership while it's value can still be modified. 
+For example:
+
+```cobalt
+const int num = 100
+int num2 = $num # error! num is a constant.
 ```
 
-<FollowUp label="Would you like to generate the docs page for structs and custom user types next?" query="Create a structs.md documentation page for Cobalt custom struct and type declarations."/>
+### Constant Pointer `const_ptr`
+Pointer constant is a value that cannot me modified / read-only.
+For Example:
 
+```cobalt
+const_ptr int MAX = 100
+*MAX = 50 # error! MAX is a constant pointer and cannot be modified.
 ```

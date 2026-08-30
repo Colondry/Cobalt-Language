@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 enum class VariableState { Active, Moved };
+enum class VariableConst { Nothing, Constant, CPointer };
 
 class Parser
 {
@@ -33,12 +34,32 @@ private:
     std::unordered_set<std::string> ctypeNames; // names introduced via 'ctype'
 
     std::vector<std::unordered_map<std::string, VariableState>> scopes;
+    std::vector<std::unordered_map<std::string, VariableConst>> const_scopes;
 
-    void pushScope() { scopes.push_back({}); }
-    void popScope() { if (!scopes.empty()) scopes.pop_back(); }
+    inline void pushScope() { scopes.push_back({}); }
+    inline void popScope() { if (!scopes.empty()) scopes.pop_back(); }
 
-    void declareVar(const std::string& name) {
+    inline void pushConst() { const_scopes.push_back({}); }
+    inline void popConst() { if(!const_scopes.empty()) const_scopes.pop_back(); }
+
+    void declareVar(const std::string& name, int conf) {
         if (!scopes.empty()) scopes.back()[name] = VariableState::Active;
+        if (const_scopes.empty()) { 
+            switch(conf) {
+                case 0: const_scopes.back()[name] = VariableConst::Nothing;
+                case 1: const_scopes.back()[name] = VariableConst::Constant;
+                case 2: const_scopes.back()[name] = VariableConst::CPointer;
+                default: reportError("unknown panic! {404}");
+            }
+        }
+    }
+
+    VariableConst getVarConstState(const std::string& name) {
+        for (auto it = const_scopes.rbegin(); it != const_scopes.rend(); ++it) {
+            auto found = it->find(name);
+            if (found != it->end()) return found->second;
+        }
+        return VariableConst::Nothing;
     }
 
     VariableState getVarState(const std::string& name) {
@@ -98,7 +119,7 @@ private:
     void parseSBlock(StructCode& str);
     void parseCBlock(ClassDecl& cls);
     void parseModuleBlock(ModuleDecl& mod);
-    StmtPtr parseVarDecl();
+    StmtPtr parseVarDecl(int c = 0); // 0 = !const, 1 = with const, 2 = with const_ptr, 3 = both
     StmtPtr parseAssignOrExprStatement();
     StmtPtr parseReturn(std::string retype);
     StmtPtr parseIf();

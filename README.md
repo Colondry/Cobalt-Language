@@ -79,7 +79,7 @@ class UserList {
         int age
     }
     public {
-        def getName(): str { ret &name }
+        def getName(): str { ret *name }
     }
 }
 ```
@@ -94,8 +94,8 @@ module UserList {
 ```cobalt
 module UserList { str Name = ""; int age = 0 }
 def main(): int {
-    readln("Name?" >> UserList::Name, "")
-    println(&UserList::Name)
+    readln("Name?" >> *UserList::Name, "")
+    println!("{}", &UserList::Name)
     ret 0
 }
 ```
