@@ -86,6 +86,11 @@ ExprPtr Parser::parseBinaryLevel(const std::function<ExprPtr()>& parseNextLevel,
     while (true) {
         std::string op = operatorFor(peek().type);
         if (op.empty()) break;
+        // An operator that starts a new line is almost always the start of the NEXT
+        // statement (e.g. a bare '*ptr = val' after a decl on the previous line), not a
+        // continuation of this expression -- the lexer doesn't emit statement-boundary
+        // tokens, so this is the only signal we have.
+        if (current > 0 && peek().line != tokens[current - 1].line) break;
         advance();
         auto binary = std::make_shared<BinaryExpr>();
         binary->op = op;
@@ -197,6 +202,8 @@ ExprPtr Parser::parseUnary() {
         if (auto nameExpr = std::dynamic_pointer_cast<NameExpr>(operand)) {
             if (getVarState(nameExpr->name) == VariableState::Moved) {
                 reportError("Cannot move already moved value '" + nameExpr->name + "'");
+            } else if (getVarConstState(nameExpr->name) == VariableConst::Constant) {
+                reportError("Cannot move 'const' variable '" + nameExpr->name + "'");
             } else {
                 setVarState(nameExpr->name, VariableState::Moved);
             }
@@ -594,6 +601,9 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         tokens[current + 1].type == TokenType::Assign) {
         std::string name = advance().text;
         advance(); // '='
+        if (getVarConstState(name) == VariableConst::Constant) {
+            reportError("Cannot reassign 'const' variable '" + name + "'");
+        }
         auto stmt = std::make_shared<AssignStmt>();
         stmt->name = name;
         stmt->value = parseExpression();
@@ -605,6 +615,23 @@ StmtPtr Parser::parseAssignOrExprStatement() {
     }
 
     ExprPtr expr = parseExpression();
+
+    if (auto un = std::dynamic_pointer_cast<UnaryExpr>(expr);
+        un && un->op == "*" && check(TokenType::Assign)) {
+        advance(); // '='
+        if (auto nameExpr = std::dynamic_pointer_cast<NameExpr>(un->operand)) {
+            if (getVarConstState(nameExpr->name) == VariableConst::CPointer) {
+                reportError("Cannot assign through 'const_ptr' variable '" + nameExpr->name + "'");
+            }
+        }
+        auto stmt = std::make_shared<ExprAssignStmt>();
+        stmt->target = expr;
+        stmt->value = parseExpression();
+        if (check(TokenType::Semicolon)) {
+            advance();
+        }
+        return stmt;
+    }
 
     if ((std::dynamic_pointer_cast<MemberExpr>(expr) || std::dynamic_pointer_cast<IndexExpr>(expr))
         && check(TokenType::Assign)) {
@@ -1012,6 +1039,7 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
     auto fnd = std::make_shared<LambFuncDecl>();
     fn.name = nameTok.text; fnd->name = nameTok.text;
     pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
+    pushConst();
     if (!check(TokenType::RParen)) {
         do {
             Param p;
@@ -1037,6 +1065,7 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
     fnd->returnType = fn.returnType;
     fnd->body = parseCFBlock(fn.returnType);
     fn.body = fnd->body;
+    popConst();
     popScope();
 
     return fnd;
@@ -1061,6 +1090,7 @@ StmtPtr Parser::parseStatement(std::string retype) {
     if (check(TokenType::Clear)) return parseClear();
     if (check(TokenType::ReadLine)) return parseReadLineCode();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
+    if (check(TokenType::Star)) return parseAssignOrExprStatement();
     if (check(TokenType::Repeat)) return parseRepeat();
     if (check(TokenType::Forever)) return parseForever();
     if (check(TokenType::PrintMac) || check(TokenType::PrintMacLn)) return parsePrintMac();
@@ -1232,6 +1262,7 @@ FunctionDecl Parser::parseFunction() {
     FunctionDecl fn;
     fn.name = nameTok.text;
     pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
+    pushConst();
     if (!check(TokenType::RParen)) {
         do {
             Param p;
@@ -1255,6 +1286,7 @@ FunctionDecl Parser::parseFunction() {
         }
     }
     fn.body = parseBlock(fn.returnType);
+    popConst();
     popScope();
     return fn;
 }

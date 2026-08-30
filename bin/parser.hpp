@@ -42,15 +42,17 @@ private:
     inline void pushConst() { const_scopes.push_back({}); }
     inline void popConst() { if(!const_scopes.empty()) const_scopes.pop_back(); }
 
-    void declareVar(const std::string& name, int conf) {
+    void declareVar(const std::string& name, int conf = 0) {
         if (!scopes.empty()) scopes.back()[name] = VariableState::Active;
-        if (const_scopes.empty()) { 
-            switch(conf) {
-                case 0: const_scopes.back()[name] = VariableConst::Nothing;
-                case 1: const_scopes.back()[name] = VariableConst::Constant;
-                case 2: const_scopes.back()[name] = VariableConst::CPointer;
-                default: reportError("unknown panic! {404}");
+        if (!const_scopes.empty()) {
+            VariableConst vc = VariableConst::Nothing;
+            switch (conf) {
+                case 0: vc = VariableConst::Nothing; break;
+                case 1: vc = VariableConst::Constant; break;
+                case 2: vc = VariableConst::CPointer; break;
+                default: reportError("unknown panic! {404}"); break;
             }
+            const_scopes.back()[name] = vc;
         }
     }
 

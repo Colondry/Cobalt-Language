@@ -1,7 +1,6 @@
-@import <base>
-def main(): int {
-    const int k = 80
-    int o = k
-    println!("{}, {}", &k, o)
-    ret 0
+def main() {
+    const int i = 100
+    const_ptr int k = 20
+
+    println!("{} {}", &i, &k)
 }
