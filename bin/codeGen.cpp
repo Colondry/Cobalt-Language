@@ -532,6 +532,8 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <utility>\n";
     file << "#include <memory>\n";
     file << "#include <type_traits>\n";
+    file << "#include <cnow.hpp>\n";
+
     file << "inline void syncw_stdio(bool s) {\n";
     file << "   std::ios_base::sync_with_stdio(s);\n";
     file << "}\n";

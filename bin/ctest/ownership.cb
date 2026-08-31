@@ -1,6 +1,4 @@
 def main() {
-    const int i = 100
-    const_ptr int k = 20
-
-    println!("{} {}", &i, &k)
+    .nptr const int num = 0
+    println!("{}", i)
 }

@@ -3,7 +3,7 @@
 
 #include <string>
 
-class __System__ {
+class System {
 public:
 	void Clear();
 	bool isNative(std::string pf);

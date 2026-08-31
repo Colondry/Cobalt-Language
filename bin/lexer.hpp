@@ -13,6 +13,7 @@ enum class TokenType {
     Identifier, Number, String, Char,
     // keywords
     Module, Arrow_Up,
+    DotNPointer,
     Class, Public, Private,
     AutoUse, Use, UseAs, UseClass,
     nUse,

@@ -5,7 +5,7 @@
 #include <ctime>
 
 
-class __str__ {
+class str {
 public:
 	int len(std::string var);
 	bool startsWith(const std::string& word, const std::string& start);
@@ -14,13 +14,13 @@ public:
 	std::string lower(std::string word);
 };
 
-class __File__ {
+class File {
 public:
 	void outf(const std::string name);
 	void delf(const std::string name);
 };
 
-class __Time__ {
+class Time {
 public:
 	clock_t Now();
 	long double Elapsed(clock_t start, clock_t end);

@@ -16,5 +16,7 @@ Welcome to the **Cobalt Language** documentation. Cobalt is a lightweight progra
 :maxdepth: 2
 :caption: Documentation Contents
 
+index
 variables
 inout
+structs

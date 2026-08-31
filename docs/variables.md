@@ -13,7 +13,7 @@ Variables can be declared using standard primitive types, automatic type deducti
 string name = "Cobalt"
 int version = 1
 bool is_active = true
-auto timestamp = __Time__.Now()
+auto timestamp = Time.Now()
 ```
 ---
 

@@ -1,0 +1,22 @@
+@import <base>
+def main(): int {
+    auto t1 = Time.Now()
+    int limit = 20000000
+    int count = 0
+
+    for i in range(2, limit) {
+        bool is_prime = true
+        int j = 2
+        while (j * j) <= i {
+            int rem = i - (i / j) * j
+            if rem == 0 { is_prime = false; break; }
+            j++
+        }
+        if (is_prime) { count++ }
+    }
+    auto t2 = Time.Now()
+    println!("Primes found: {}", count)
+    println!("Total time on v0.7.5 Beta is {} seconds", Time.Elapsed(t1, t2))
+
+    ret 0
+}

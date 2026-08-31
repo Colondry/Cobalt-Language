@@ -18,7 +18,7 @@ void enableVirtualTerminal() {
 #endif
 
 
-void __System__::Clear() {
+void System::Clear() {
     // Check for Windows OS (both 32-bit and 64-bit)
     #if defined(_WIN32) || defined(_WIN64)
         std::system("cls");
@@ -32,7 +32,7 @@ void __System__::Clear() {
         std::cout << "OS not supported for clearing screen." << std::endl;
     #endif
 }
-bool __System__::isNative(std::string pf) {
+bool System::isNative(std::string pf) {
     if (pf != "_WIN32" || pf != "_WIN64"
         || pf != "_GNU_LINUX" || pf != "_LINUX") {
         std::cerr << "OS Type not supported!\n";
@@ -71,7 +71,7 @@ bool __System__::isNative(std::string pf) {
         return false;
     }
 }
-void __System__::clearLines(int lines) {
+void System::clearLines(int lines) {
     if (lines <= 0) return;
 #ifdef _WIN32
     enableVirtualTerminal();
@@ -109,12 +109,12 @@ extern "C" {
 }
 #endif
 
-void* __System__::Malloc(size_t size) {
+void* System::Malloc(size_t size) {
     return System_Malloc(size);
 }
-void* __System__::ReAlloc(void* ptr, size_t size) {
+void* System::ReAlloc(void* ptr, size_t size) {
     return System_Realloc(ptr, size);
 }
-void __System__::Free(void* ptr) {
+void System::Free(void* ptr) {
     System_Free(ptr);
 }

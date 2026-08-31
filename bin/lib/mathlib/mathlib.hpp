@@ -4,7 +4,7 @@
 #include <string>
 #include <utility>
 
-class __Math__ {
+class Math {
 public:
 	long double power(long double x, long double y);
 	double sqroot(double y);
