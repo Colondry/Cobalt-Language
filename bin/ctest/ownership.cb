@@ -1,4 +1,4 @@
 def main() {
-    .nptr const int num = 0
-    println!("{}", i)
+    const const_ptr int o = 0
+    println!("{}", o)
 }

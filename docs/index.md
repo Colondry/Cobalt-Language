@@ -20,3 +20,4 @@ index
 variables
 inout
 structs
+Classes
