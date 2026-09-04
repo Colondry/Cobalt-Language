@@ -475,15 +475,22 @@ std::vector<StmtPtr> Parser::parseInlineBlock(std::string retype) {
 
 StmtPtr Parser::parseVarDecl(int c) {
     auto decl = std::make_shared<VarDecl>();
-    decl->c = false; decl->cptr = false;
+    decl->c = false; decl->cptr = false; decl->uns = true;
     switch (c) {
-        case 0: break;
+        case 0: decl->uns = true; break;
         case 1: decl->c = true; break;
         case 2: decl->cptr = true; break;
         default: reportError("unknown panic! {404}");
     }
+    if (check(TokenType::DotNPointer)) { if (!decl->uns) decl->uns = true; advance(); }
+    else { if (decl->uns) decl->uns = false; }
     if (check(TokenType::Constant)) advance();
-    if (check(TokenType::ConstantPtr)) advance();
+    if (check(TokenType::ConstantPtr)) { 
+        decl->cptr = true; 
+        if (decl->uns) c = 3; 
+        else reportError("cannot use 'nptr' with 'const_ptr' at the same declaration!");
+        advance(); 
+    }
     if (check(TokenType::List)) {
         advance(); // 'List'
         decl->type = "List";
@@ -733,11 +740,21 @@ StmtPtr Parser::parseForever() {
 
 StmtPtr Parser::parseForRange() {
     advance(); // 'for'
-    Token nameTok = expect(TokenType::Identifier, "loop variable");
     auto stmt = std::make_shared<ForRangeStmt>();
-    expect(TokenType::In, "'in'");
-    stmt->varName = nameTok.text;
-    stmt->condition= parseExpression();
+
+    if (check(TokenType::Identifier) && peekNext().type == TokenType::In) { 
+        Token nameTok = expect(TokenType::Identifier, "loop variable");
+        expect(TokenType::In, "'in'");
+        stmt->varName = nameTok.text;
+        stmt->condition = parseExpression();
+    }
+    else { // for 0..5 {} or for start_var..end_var {}
+        stmt->shorte = true;
+        stmt->start = parseLogicalOr(); // Parses '0' and stops at '..'
+        expect(TokenType::DoubleDot, "..");
+        stmt->end = parseLogicalOr();   // Parses '5' and stops at '{'
+    }
+    
     stmt->body = parseBlock("");
     return stmt;
 }
@@ -1075,6 +1092,7 @@ StmtPtr Parser::parseStatement(std::string retype) {
     if (looksLikeVarDecl()) return parseVarDecl();
     if (check(TokenType::Constant)) return parseVarDecl(1); // const
     if (check(TokenType::ConstantPtr)) return parseVarDecl(2); // const_ptr
+    if (check(TokenType::DotNPointer)) return parseVarDecl(0); // nptr
     if (check(TokenType::Semicolon)) advance();
     if (check(TokenType::Ret)) return parseReturn(retype);
     if (check(TokenType::Lambda)) return parseLambdaFn(retype);
@@ -1106,6 +1124,7 @@ StmtPtr Parser::parseSStr() {
     if (looksLikeVarDecl()) return parseVarDecl();
     if (check(TokenType::Constant)) return parseVarDecl(1); // const
     if (check(TokenType::ConstantPtr)) return parseVarDecl(2); // const_ptr
+    if (check(TokenType::DotNPointer)) return parseVarDecl(0); // nptr
     if (check(TokenType::Semicolon)) advance();
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||
@@ -1127,6 +1146,7 @@ StmtPtr Parser::parseSClass() {
     if (looksLikeVarDecl()) return parseVarDecl();
     if (check(TokenType::Constant)) return parseVarDecl(1); // const
     if (check(TokenType::ConstantPtr)) return parseVarDecl(2); // const_ptr
+    if (check(TokenType::DotNPointer)) return parseVarDecl(0); // nptr
     if (check(TokenType::Semicolon)) advance();
     if (check(TokenType::Fn)) return parseCFunction();
     if (check(TokenType::Print) || check(TokenType::PrintLine) ||

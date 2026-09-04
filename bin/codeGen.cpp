@@ -42,7 +42,7 @@ static std::string emitTypeDeclLine(const TypeDecl& t) {
     return "using " + t.name + " = " + cppType(t.type) + ";\n";
 }
 
-static std::string emitExpr(const ExprPtr& e);
+static std::string emitExpr(const ExprPtr& e, const bool uns = false, std::string type = "");
 
 static std::string emitConcatPieces(const std::shared_ptr<ConcatExpr>& c) {
     std::string out;
@@ -80,7 +80,7 @@ static std::string emitCFSignature(const CFuncDecl& fn) {
     return out += ")";
 }
 
-static std::string emitExpr(const ExprPtr& e) {
+static std::string emitExpr(const ExprPtr& e, const bool uns, std::string type) {
     if (auto n = std::dynamic_pointer_cast<NumberLit>(e)) return n->value;
     if (auto s = std::dynamic_pointer_cast<StringLit>(e)) return s->value;
     if (auto lq = std::dynamic_pointer_cast<LnQuote>(e)) return lq->value;
@@ -91,33 +91,33 @@ static std::string emitExpr(const ExprPtr& e) {
         // Ownership symbol
         if (u->op == "$") {
             // Transfers ownership; source unique_ptr becomes nullptr
-            return "std::move(" + emitExpr(u->operand) + ")";
+            return "std::move(" + emitExpr(u->operand, uns) + ")";
         }
         // Borrower symbol
         if (u->op == "&") {
             // Borrows underlying raw pointer; safely dereferenced via .get()
-            return emitExpr(u->operand) + ".get()";
+            return emitExpr(u->operand, uns) + ".get()";
         }
         // Pointer symbol
         if (u->op == "*") {
             // Protected using parenteheses '(*(<ExprPtr>))'
-            return "(*(" + emitExpr(u->operand) + "))";
+            return "(*(" + emitExpr(u->operand, uns) + "))";
         }
         // idk
         if (u->op == "-") {
-            return "(-" + emitExpr(u->operand) + ")";
+            return "(-" + emitExpr(u->operand, uns) + ")";
         }
         // 'Not' boolian symbol
         if (u->op == "!") {
-            return "(!" + emitExpr(u->operand) + ")";
+            return "(!" + emitExpr(u->operand, uns) + ")";
         }
     }
 
     if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e)) {
         if (b->op == "+") {
-            return "__cadd__(" + emitExpr(b->lhs) + ", " + emitExpr(b->rhs) + ")";
+            return "__cadd__(" + emitExpr(b->lhs, uns) + ", " + emitExpr(b->rhs) + ")";
         }
-        return "(" + emitExpr(b->lhs) + " " + b->op + " " + emitExpr(b->rhs) + ")";
+        return "(" + emitExpr(b->lhs, uns) + " " + b->op + " " + emitExpr(b->rhs) + ")";
     }
 
     // Dereference smart pointer before indexing
@@ -134,8 +134,9 @@ static std::string emitExpr(const ExprPtr& e) {
             inner += emitExpr(lit->items[i]);
         }
         inner += "}";
-        return "std::make_unique<std::vector<decltype(" + 
-               (lit->items.empty() ? "0" : emitExpr(lit->items[0])) + ")>>(" + inner + ")";
+        if (!uns) return "std::make_unique<std::vector<decltype(" + 
+               (lit->items.empty() ? "0" : emitExpr(lit->items[0])) + ")>>(std::vector<" + type + ">" + inner + ")";
+        else return inner;
     }
 
     if (auto fl = std::dynamic_pointer_cast<FracLit>(e)) {
@@ -145,7 +146,8 @@ static std::string emitExpr(const ExprPtr& e) {
             inner += emitExpr(fl->items[i]);
         }
         inner += "}";
-        return "std::make_unique<frac>(" + inner + ")";
+        if (!uns) return "std::make_unique<frac>(" + inner + ")";
+        else return inner;
     }
 
     if (auto call = std::dynamic_pointer_cast<CallExpr>(e)) {
@@ -199,7 +201,7 @@ static std::string emitExpr(const ExprPtr& e) {
 }
 
 // Helper function to emit unique_ptr wrapped initializers
-static std::string emitInitExpr(const std::string& typeStr, const ExprPtr& initExpr) {
+static std::string emitInitExpr(const std::string& typeStr, const ExprPtr& initExpr, const bool uns = false) {
     if (!initExpr) return "nullptr";
 
     if (auto u = std::dynamic_pointer_cast<UnaryExpr>(initExpr)) {
@@ -207,7 +209,8 @@ static std::string emitInitExpr(const std::string& typeStr, const ExprPtr& initE
     }
 
     std::string val = emitExpr(initExpr);
-    return "std::make_unique<" + typeStr + ">(" + val + ")";
+    if (!uns) return "std::make_unique<" + typeStr + ">(" + val + ")";
+    else return val;
 }
 
 static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
@@ -267,27 +270,32 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         if (v->c) out << indent(depth) << "const ";
         else out << indent(depth);
 
-        std::string cptr = v->cptr ? "const " : "";
+        std::string cptr = "";
+        if (!v->uns) cptr = v->cptr ? "const " : "";
 
         if (v->type == "List") {
             std::string vecType = "std::vector<" + cppType(v->elemType) + ">";
-            out << "std::unique_ptr<" << cptr << vecType << "> " << v->name;
-            out << " = " << (v->init ? emitExpr(v->init) : "nullptr") << ";\n";
+            if (!v->uns) out << "std::unique_ptr<" << cptr << vecType << "> " << v->name;
+            else out << vecType << " " << v->name;
+            out << " = " << (v->init ? emitExpr(v->init, v->uns, cppType(v->elemType)) : "nullptr") << ";\n";
         }
         else if (v->type == "Fraction") {
             std::string fracType = "frac<" + cppType(v->elemType) + ", " + cppType(v->secElemType) + ">";
-            out << "std::unique_ptr<" << cptr << fracType << "> " << v->name;
-            out << " = " << (v->init ? emitExpr(v->init) : "nullptr") << ";\n";
+            if (!v->uns) out << "std::unique_ptr<" << cptr << fracType << "> " << v->name;
+            else out << fracType << " " << v->name;
+            out << " = " << (v->init ? emitExpr(v->init, v->uns) : "nullptr") << ";\n";
         }
         else if (v->type == "auto") {
-            std::string init = emitExpr(v->init);
-            out << "auto " << v->name << " = std::make_unique<" 
+            std::string init = emitExpr(v->init, v->uns);
+            if (!v->uns) out << "auto " << v->name << " = std::make_unique<" 
                 << cptr << "std::decay_t<decltype(" << init << ")>>(" << init << ");\n";
+            else out << "auto " << v->name << " = " << init << ";\n";
         }
         else {
             std::string targetType = cppType(v->type);
-            out << "std::unique_ptr<" << cptr << targetType << "> " << v->name;
-            out << " = " << emitInitExpr(targetType, v->init) << ";\n";
+            if (!v->uns) out << "std::unique_ptr<" << cptr << targetType << "> " << v->name;
+            else out << targetType << " " << v->name;
+            out << " = " << emitInitExpr(targetType, v->init, v->uns) << ";\n";
         }
         return;
     }
@@ -303,21 +311,29 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
 
     // Dereference container for range-based loops
     if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(stmt)) {
+        if (f->shorte) {
+            std::string start = emitExpr(f->start);
+            std::string end = emitExpr(f->end);
+            out << indent(depth) << "__cobalt_if_end_lasttime = " << end;
+            out << indent(depth) << "for (int64_t " << f->varName << " = " << start 
+                << "; " << f->varName << " < __cobalt_if_end_lasttime; " << f->varName << "++) {\n";
+            emitBlock(f->body, depth + 1, out);
+            out << indent(depth) << "}\n";
+            return;
+        }
         if (auto call = std::dynamic_pointer_cast<CallExpr>(f->condition)) {
             if (call->callee == "range" && call->args.size() == 2) {
                 std::string start = emitExpr(call->args[0]);
                 std::string end = emitExpr(call->args[1]);
-
-                out << indent(depth) << "for (int " << f->varName << " = " << start 
-                    << "; " << f->varName << " < " << end << "; " << f->varName << "++) {\n";
+                out << indent(depth) << "__cobalt_if_end_lasttime = " << end;
+                out << indent(depth) << "for (int64_t " << f->varName << " = " << start 
+                    << "; " << f->varName << " < __cobalt_if_end_lasttime; " << f->varName << "++) {\n";
                 emitBlock(f->body, depth + 1, out);
                 out << indent(depth) << "}\n";
                 return;
             }
         }
-
-        // Dereference smart container pointer (*expr) for C++ range iteration
-        out << indent(depth) << "for (auto&& " << f->varName << " : *(" << emitExpr(f->condition) << ")) {\n";
+        out << indent(depth) << "for (auto&& " << f->varName << " : " << emitExpr(f->condition) << ") {\n";
         emitBlock(f->body, depth + 1, out);
         out << indent(depth) << "}\n";
         return;
@@ -532,13 +548,14 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <utility>\n";
     file << "#include <memory>\n";
     file << "#include <type_traits>\n";
-    file << "#include <cnow.hpp>\n";
+    file << "#include <cnow.hpp>\n\n";
 
     file << "inline void syncw_stdio(bool s) {\n";
     file << "   std::ios_base::sync_with_stdio(s);\n";
     file << "}\n";
     file << "inline thread_local int cobalt__try_status__ = 0;\n";
     file << "inline int TryStatus() { return cobalt__try_status__; }";
+    file << "int64_t __cobalt_if_end_lasttime = 0;\n";
 
     file << "\n";
 

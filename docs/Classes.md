@@ -42,11 +42,13 @@ struct Weapon {
     string title = ""
     int base_damage = 0
 }
-
-class Entity {
+struct Entity {
     string name = ""
     string enemy = ""
     int hp = 100
+}
+
+class Game {
     Weapon weapon = []
 
     def attack(Entity entity): void {
@@ -56,55 +58,14 @@ class Entity {
 }
 
 def main(): int {
-    Weapon sword = Weapon { title: "Excalibur", base_damage: 35 }
-    Entity hero = Entity { name: "Hero", hp: 100, weapon: $sword }
+    Weapon sword = [ "Excalibur", 35 ]
+    Entity hero =  [name: "Hero", hp: 100, weapon: $sword]
 
-    Weapon club = Weapon { title: "Wooden Club", base_damage: 10 }
-    Entity goblin = Entity { name: "Goblin", hp: 40, weapon: $club }
+    Weapon club = [ "Wooden Club", 10 ]
+    Entity goblin = [ "Goblin", 40, $club ]
 
     hero.attack(&goblin)
     println!("Goblin HP: {}", goblin.hp)
 
     ret 0
 }
-
-```
-
----
-
-### Cobalt Source
-
-```cobalt
-*BankAccount.owner = "John"
-*BankAccount.is_frozen = true
-*BankAccount.balance = 2500
-
-```
-
-### Transpiled C++ Output (`.cpp`)
-
-```cpp
-class BankAccount {
-private:
-    std::unique_ptr<int> balance;
-    std::unique_ptr<bool> is_frozen;
-
-public:
-    std::unique_ptr<c_string> owner;
-
-    void deposit(int amount) {
-        if (*is_frozen) {
-            std::cout << "Account is frozen!\n";
-            return;
-        }
-        *balance += amount;
-    }
-
-    int get_balance() const {
-        return *balance;
-    }
-};
-
-
-
-```

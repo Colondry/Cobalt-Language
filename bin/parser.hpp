@@ -9,7 +9,7 @@
 #include <unordered_set>
 
 enum class VariableState { Active, Moved };
-enum class VariableConst { Nothing, Constant, CPointer };
+enum class VariableConst { Nothing, Constant, CPointer, Both };
 
 class Parser
 {
@@ -50,6 +50,8 @@ private:
                 case 0: vc = VariableConst::Nothing; break;
                 case 1: vc = VariableConst::Constant; break;
                 case 2: vc = VariableConst::CPointer; break;
+                case 3: vc = VariableConst::Both; break;
+
                 default: reportError("unknown panic! {404}"); break;
             }
             const_scopes.back()[name] = vc;
@@ -84,6 +86,7 @@ private:
 
     // ---------- Core cursor / matching infra (defined in parser.cpp) ----------
     const Token& peek() const;
+    const Token& peekNext() const;
     Token advance();
     bool check(TokenType type) const;
     bool match(TokenType type);

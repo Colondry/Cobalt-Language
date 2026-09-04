@@ -3,6 +3,7 @@
 
 #include <string>
 #include <ctime>
+#include <memory>
 
 
 class str {
@@ -23,7 +24,21 @@ public:
 class Time {
 public:
 	clock_t Now();
-	long double Elapsed(clock_t start, clock_t end);
+	
+	long double Elapsed(clock_t start, clock_t end) {
+		return static_cast<long double>(end - start) / CLOCKS_PER_SEC;
+	}
+	inline long double Elapsed(const std::unique_ptr<clock_t>& start, const std::unique_ptr<clock_t>& end) {
+		return Elapsed(start ? *start : 0, end ? *end : 0);
+	}
+
+	inline long double Elapsed(const std::unique_ptr<clock_t>& start, clock_t end) {
+		return Elapsed(start ? *start : 0, end);
+	}
+
+	inline long double Elapsed(clock_t start, const std::unique_ptr<clock_t>& end) {
+		return Elapsed(start, end ? *end : 0);
+	}
 };
 
 long double rand(long double min, long double max);

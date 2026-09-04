@@ -20,7 +20,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"clear", TokenType::Clear}, {"ctype", TokenType::CType},
     {"notuse", TokenType::nUse}, {"const", TokenType::Constant},
     {"const_ptr", TokenType::ConstantPtr},
-    {".nptr", TokenType::DotNPointer},
+    {"nptr", TokenType::DotNPointer},
     {"try", TokenType::Try}, {"except", TokenType::Except},
 
     // Operators
@@ -184,8 +184,8 @@ std::vector<Token> tokenize(const std::string& src) {
             if (two == "*=") { push(TokenType::AssignMulti, two); i += 2; continue; }
             if (two == "/=") { push(TokenType::AssignSlash, two); i += 2; continue; }
             if (two == "};") { push(TokenType::SClose, two); i += 2; continue; }
+            if (two == "..") { push(TokenType::DoubleDot, two); i += 2; continue; }
         }
-
         // single-character tokens
         switch (c) {
         case '(': push(TokenType::LParen, "("); break;

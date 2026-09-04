@@ -1,0 +1,8 @@
+def main(): int {
+    nptr List<int> i = [9, 0] 
+    List<int> o = [8, 8]
+    try for on in *o { io::writef(on) io::writef("\n") }
+    try for h in i { io::writef(h) io::writef("\n") }
+    for 0..5 { println!("H") }
+    ret 0
+}

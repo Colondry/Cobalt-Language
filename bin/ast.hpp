@@ -50,7 +50,8 @@ public:
     int arraySize = -1;       // >=0 for "char c[20]"
     ExprPtr init;             // never null -- every declaration requires an initializer (memory safety)
     bool isNull = false;      // always false; kept for structural compatibility
-    bool c, cptr = false;
+    bool c, cptr; 
+    bool uns = true;
 };
 class TypeDecl : public Stmt {
 public:
@@ -148,8 +149,11 @@ public:
 
 class ForRangeStmt : public Stmt {
 public:
+    bool shorte = false;
     std::string varName;
     ExprPtr condition;
+    ExprPtr start;
+    ExprPtr end;
     std::vector<StmtPtr> body;
 };
 

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <random>
+#include <memory>
 #include "../mathlib/mathlib.hpp"
 
 int str::len(std::string var) {
@@ -37,9 +38,6 @@ std::string str::lower(std::string word) {
 
 clock_t Time::Now() {
 	return std::clock();
-}
-long double Time::Elapsed(clock_t start, clock_t end) {
-	return static_cast<long double>(end - start) / CLOCKS_PER_SEC;
 }
 
 long double rand(long double min, long double max) {

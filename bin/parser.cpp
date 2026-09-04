@@ -7,6 +7,13 @@ Parser::Parser(std::vector<Token> tokens, std::string source, std::string inputF
 
 // ---------- Core cursor / matching infra ----------
 
+const Token& Parser::peekNext() const {
+    if (current + 1 < tokens.size()) {
+        return tokens[current + 1];
+    }
+    return tokens.back(); // Returns EOF token if at end
+}
+
 const Token& Parser::peek() const {
     return tokens[current];
 }
