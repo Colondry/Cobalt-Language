@@ -7,7 +7,10 @@ def main() {
     const_ptr double done1 = Time.Elapsed(*t1, Time.Now())
 
     const_ptr auto tt1 = Time.Now()
-    for i in range(0, 1000000) { kernel::call::write(csm::toCStr(*i), strlen(csm::toCStr(*i))) kernel::call::write("\n", 1) }
+    for i in range(0, 1000000) { 
+        kernel::call::write(csm::toCStr(*i), strlen(csm::toCStr(*i)))
+        kernel::call::write("\n", 1) 
+    }
     const_ptr double done2 = Time.Elapsed(*tt1, Time.Now())
 
     println!("Done with io::writef() in {} seconds.", &done1);
