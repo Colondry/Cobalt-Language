@@ -325,9 +325,9 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
             if (call->callee == "range" && call->args.size() == 2) {
                 std::string start = emitExpr(call->args[0]);
                 std::string end = emitExpr(call->args[1]);
-                out << indent(depth) << "__cobalt_if_end_lasttime = " << end;
-                out << indent(depth) << "for (int64_t " << f->varName << " = " << start 
-                    << "; " << f->varName << " < __cobalt_if_end_lasttime; " << f->varName << "++) {\n";
+                out << indent(depth) << "for (std::unique_ptr<int64_t> " << f->varName << " = std::make_unique<int64_t>(" << start 
+                    << "); *" << f->varName << ".get() < " << end << "; (*" << f->varName << ")++) {\n";
+                if (std::stoi(end) < 100) out << indent(depth) << "#pragma omp simd\n";
                 emitBlock(f->body, depth + 1, out);
                 out << indent(depth) << "}\n";
                 return;
@@ -554,8 +554,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "   std::ios_base::sync_with_stdio(s);\n";
     file << "}\n";
     file << "inline thread_local int cobalt__try_status__ = 0;\n";
-    file << "inline int TryStatus() { return cobalt__try_status__; }";
-    file << "int64_t __cobalt_if_end_lasttime = 0;\n";
+    file << "inline int TryStatus() { return cobalt__try_status__; }\n";
 
     file << "\n";
 

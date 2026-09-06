@@ -74,6 +74,32 @@ namespace csm {
         }
     }
 
+    template <typename T>
+    inline char* toCStr(const T& val) {
+        decltype(auto) v = unwrap_val(val);
+        using UnwrappedT = std::decay_t<decltype(v)>;
+
+        if constexpr (std::is_same_v<UnwrappedT, const char*> || std::is_same_v<UnwrappedT, char*>) {
+            return const_cast<char*>(v ? v : "");
+        } else if constexpr (std::is_same_v<UnwrappedT, std::string>) {
+            return const_cast<char*>(v.c_str());
+        } else if constexpr (std::is_same_v<UnwrappedT, char>) {
+            thread_local static char buf[2] = {0, 0};
+            buf[0] = v;
+            return buf;
+        } else if constexpr (std::is_arithmetic_v<UnwrappedT>) {
+            thread_local static char buf[32];
+            auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf) - 1, v);
+            if (ec == std::errc{}) {
+                *ptr = '\0';
+                return buf;
+            }
+            return const_cast<char*>("");
+        } else {
+            return const_cast<char*>("");
+        }
+    }
+
     // --- Type & Conversion Validators ---
 
     // Returns true if the value is NOT an integer or cannot be parsed as one

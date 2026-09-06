@@ -1,4 +1,5 @@
 @import <base>
+@import <kern>
 
 def main() {
     const_ptr auto t1 = Time.Now()
@@ -6,17 +7,17 @@ def main() {
     const_ptr double done1 = Time.Elapsed(*t1, Time.Now())
 
     const_ptr auto tt1 = Time.Now()
-    for i in range(0, 1000000) { println!("{}", i) }
+    for i in range(0, 1000000) { kernel::call::write(csm::toCStr(*i), strlen(csm::toCStr(*i))) kernel::call::write("\n", 1) }
     const_ptr double done2 = Time.Elapsed(*tt1, Time.Now())
 
     println!("Done with io::writef() in {} seconds.", &done1);
-    println!("Done with println!() in {} seconds.", &done2)
+    println!("Done with kernel::call::write() in {} seconds.", &done2)
 
     double slow = 0
     double fast = 0
 
     # Larger time = SLOWER execution; smaller time = FASTER execution
-    if (done1 > done2) {
+    if *done1 > *done2 {
         *slow = *done1  # done1 took longer
         *fast = *done2  # done2 took less time
     } else {
@@ -26,11 +27,8 @@ def main() {
 
     const double percent = ((*slow / *fast) - 1) * 100
 
-    if (done1 > done2) {
-        println!("println!() is faster than io::writef() by {}% faster.", &percent)
-    } else {
-        println!("io::writef() is faster than println!() by {}% faster.", &percent)
-    }
+    if done1 > done2 println!("println!() is faster than io::writef() by {}% faster.", *percent)
+    else println!("io::writef() is faster than println!() by {}% faster.", *percent)
 
     ret 0
 }

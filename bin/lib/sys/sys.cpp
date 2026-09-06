@@ -89,32 +89,24 @@ void System::clearLines(int lines) {
 
 #include <cstdlib>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-    void* System_Malloc(size_t size) {
-        return std::malloc(size);
-    }
-
-    void* System_Realloc(void* ptr, size_t new_size) {
-        return std::realloc(ptr, new_size);
-    }
-
-    void System_Free(void* ptr) {
-        std::free(ptr);
-    }
-
-#ifdef __cplusplus
+void* System_Malloc(size_t size) {
+    return std::malloc(size);
 }
-#endif
 
-void* System::Malloc(size_t size) {
+void* System_Realloc(void* ptr, size_t new_size) {
+    return std::realloc(ptr, new_size);
+}
+
+void System_Free(void* ptr) {
+    std::free(ptr);
+}
+
+void* System::malloc(size_t size) {
     return System_Malloc(size);
 }
-void* System::ReAlloc(void* ptr, size_t size) {
+void* System::realloc(void* ptr, size_t size) {
     return System_Realloc(ptr, size);
 }
-void System::Free(void* ptr) {
+void System::free(void* ptr) {
     System_Free(ptr);
 }

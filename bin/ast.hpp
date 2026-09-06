@@ -127,6 +127,7 @@ public:
 class IfStmt : public Stmt {
 public:
     ExprPtr condition;
+    bool unl, lik = false;
     std::vector<StmtPtr> body;
 };
 

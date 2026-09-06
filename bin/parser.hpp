@@ -47,12 +47,13 @@ private:
         if (!const_scopes.empty()) {
             VariableConst vc = VariableConst::Nothing;
             switch (conf) {
+                case 5: vc = VariableConst::Nothing; break;
                 case 0: vc = VariableConst::Nothing; break;
                 case 1: vc = VariableConst::Constant; break;
                 case 2: vc = VariableConst::CPointer; break;
                 case 3: vc = VariableConst::Both; break;
 
-                default: reportError("unknown panic! {404}"); break;
+                default: reportError("unknown panic! {" + std::to_string(conf) + "} computing error"); break;
             }
             const_scopes.back()[name] = vc;
         }
@@ -124,7 +125,7 @@ private:
     void parseSBlock(StructCode& str);
     void parseCBlock(ClassDecl& cls);
     void parseModuleBlock(ModuleDecl& mod);
-    StmtPtr parseVarDecl(int c = 0); // 0 = !const, 1 = with const, 2 = with const_ptr, 3 = both
+    StmtPtr parseVarDecl(int c = 5); // 0 = !const, 1 = with const, 2 = with const_ptr, 3 = both
     StmtPtr parseAssignOrExprStatement();
     StmtPtr parseReturn(std::string retype);
     StmtPtr parseIf();

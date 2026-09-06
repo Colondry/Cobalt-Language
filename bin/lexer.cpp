@@ -21,6 +21,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"notuse", TokenType::nUse}, {"const", TokenType::Constant},
     {"const_ptr", TokenType::ConstantPtr},
     {"nptr", TokenType::DotNPointer},
+    {"%unlikely", TokenType::ifu}, {"%likely", TokenType::ifl},
     {"try", TokenType::Try}, {"except", TokenType::Except},
 
     // Operators

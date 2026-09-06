@@ -42,7 +42,7 @@ enum class TokenType {
     // operators
     Assign, Eq, Neq, Lt, Gt, Le, Ge, AndAnd, OrOr,
     Plus, Minus, Star, Slash, Shl, Shr,
-    PlusPlus, MinusMinus,
+    PlusPlus, MinusMinus, ifu, ifl,
     AssignAdd, AssignMinus, AssignMulti, AssignSlash,
     // unrecognized character
     Invalid,

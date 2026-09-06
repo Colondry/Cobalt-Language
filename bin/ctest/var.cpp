@@ -46,6 +46,9 @@ int main() {
         }
     }
     catch (...) {}
+    for (int __value__ = 0; __value__ < 5; __value__++) {
+        println_c("H");
+    }
     return 0;
 }
 
