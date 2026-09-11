@@ -124,27 +124,42 @@ public:
     std::vector<StmtPtr> body;
 };
 
-class IfStmt : public Stmt {
+class ElifStmt : public Stmt {
 public:
     ExprPtr condition;
     bool unl, lik = false;
     std::vector<StmtPtr> body;
 };
 
-class ElifStmt : public Stmt {
+class ElseStmt : public Stmt {
 public:
-    ExprPtr condition;
+    bool unl, lik = false;
     std::vector<StmtPtr> body;
 };
 
-class ElseStmt : public Stmt {
+class IfStmt : public Stmt {
 public:
+    ExprPtr condition;
+    bool unl, lik, eiunl, eilik, eunl, elik, iselif, iselse = false;
     std::vector<StmtPtr> body;
+    ExprPtr elifCond;
+    std::vector<StmtPtr> elifbody;
+    std::vector<StmtPtr> elsebody;
+
 };
+
+
 
 class WhileStmt : public Stmt {
 public:
     ExprPtr condition;
+    std::vector<StmtPtr> body;
+};
+
+class DoStmt : public Stmt {
+public:
+    ExprPtr start;
+    ExprPtr end;
     std::vector<StmtPtr> body;
 };
 

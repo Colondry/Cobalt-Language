@@ -1,6 +1,6 @@
-# v0.8.0
+# v0.8.2
 @import <base>
-def main(): int {
+def main() {
     auto t1 = Time.Now()
     const_ptr int limit = 20000000
     const int count = 0
@@ -9,17 +9,16 @@ def main(): int {
         const bool is_prime = true
         const int j = 2
         while (*j * *j) <= i {
-            const_ptr int rem = i - (i / *j) * *j
-            if *rem == 0 { *is_prime = false; break; }
+            if (i - (i / *j) * *j) == 0 { *is_prime = false; break; }
             j++
         }
-        if (*is_prime) { count++ }
+        if *is_prime count++
     }
     auto t2 = Time.Now()
     println!("Primes found: {}", &count)
-    println!("Total time on v0.8.0 Stable is {} seconds", Time.Elapsed(*t1, *t2))
+    println!("Total time on v0.8.2 Stable is {} seconds", Time.Elapsed(*t1, *t2))
 
     ret 0
 }
 
-#v0.8.1
+#v0.8.2

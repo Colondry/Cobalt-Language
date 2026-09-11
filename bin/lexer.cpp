@@ -21,8 +21,9 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"notuse", TokenType::nUse}, {"const", TokenType::Constant},
     {"const_ptr", TokenType::ConstantPtr},
     {"nptr", TokenType::DotNPointer},
-    {"%unlikely", TokenType::ifu}, {"%likely", TokenType::ifl},
+    {"unlikely", TokenType::ifu}, {"likely", TokenType::ifl},
     {"try", TokenType::Try}, {"except", TokenType::Except},
+    {"do", TokenType::Do}, {"to", TokenType::To},
 
     // Operators
     {"and", TokenType::AndAnd},
@@ -211,6 +212,7 @@ std::vector<Token> tokenize(const std::string& src) {
         case '^': push(TokenType::Arrow_Up, "^"); break;
         case '$': push(TokenType::Dollar, "$"); break;
         case '&': push(TokenType::And, "&"); break;
+        case '%': push(TokenType::Percent, "%"); break;
         default:
             push(TokenType::Invalid, std::string(1, c));
             break;

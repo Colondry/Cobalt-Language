@@ -113,6 +113,7 @@ Program Parser::parse() {
         else if (check(TokenType::Module)) program.modules.push_back(parseModule());
         else if (check(TokenType::CType)) program.typedefs.push_back(parseNCType());
         else if (check(TokenType::nUse)) program.use_built = parsenUse();
+        else if (check(TokenType::Semicolon)) [[unlikely]] advance();
         else {
             reportError("unexpected top-level token '" + peek().text + "'");
             recoverStatement();

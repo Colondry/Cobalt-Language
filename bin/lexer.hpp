@@ -29,6 +29,7 @@ enum class TokenType {
     Continue, Break,
     Clear, CType,
     Try, Except,
+    Do, To,
     // built-in types
     TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte,
     TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,
@@ -38,7 +39,7 @@ enum class TokenType {
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,
-    Not, LnQuote, LnClose, Dollar, And, DoubleDot,
+    Not, LnQuote, LnClose, Dollar, And, DoubleDot, Percent,
     // operators
     Assign, Eq, Neq, Lt, Gt, Le, Ge, AndAnd, OrOr,
     Plus, Minus, Star, Slash, Shl, Shr,

@@ -112,6 +112,7 @@ private:
     ExprPtr parseComparison();     // < > <= >=
     ExprPtr parseAdditive();       // + -
     ExprPtr parseMultiplicative(); // * /
+    ExprPtr parsePercent();        // %
     ExprPtr parseUnary();          // unary -
     ExprPtr parsePostfix();        // x[i], x++
     ExprPtr parsePrimary();        // literals, ( ), names, calls
@@ -146,6 +147,7 @@ private:
     StmtPtr parseClear();
     StmtPtr parsePrintMac();
     StmtPtr parseTryExcept();
+    StmtPtr parseDo();
     StmtPtr parseCType();
     TypeDecl parseCTypeBody(); // shared by parseCType() (statement) and parseNCType() (top-level)
 

@@ -1,0 +1,26 @@
+def main() {
+    # for range()
+    for i in range(0, 7) println!("{}", *i)
+
+    # repeat
+    int o = 0; 
+    repeat 7 { println!("{}", *o); o++ }
+ 
+    # likely & unlikely cpu predictions
+    int8 i = 0
+    if <likely> *i == 0 println!("i is 0")
+    elif *i != 0 i++
+    else <unlikely> i--
+
+
+    # do start to end, repeat 7 times
+    do 0 to 7 println!("H")
+
+    println!("{}", 176 % 98)
+
+    int x = 8
+    int xnef = -(&x)
+    println!("{} {}", *x, *xnef)
+
+    ret 0
+}

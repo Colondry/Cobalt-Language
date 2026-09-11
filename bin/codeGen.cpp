@@ -42,7 +42,7 @@ static std::string emitTypeDeclLine(const TypeDecl& t) {
     return "using " + t.name + " = " + cppType(t.type) + ";\n";
 }
 
-static std::string emitExpr(const ExprPtr& e, const bool uns = false, std::string type = "");
+static std::string emitExpr(const ExprPtr& e, const bool uns = false, std::string type = "", const bool inMin = false);
 
 static std::string emitConcatPieces(const std::shared_ptr<ConcatExpr>& c) {
     std::string out;
@@ -80,12 +80,12 @@ static std::string emitCFSignature(const CFuncDecl& fn) {
     return out += ")";
 }
 
-static std::string emitExpr(const ExprPtr& e, const bool uns, std::string type) {
+static std::string emitExpr(const ExprPtr& e, const bool uns, std::string type, const bool inMin) {
     if (auto n = std::dynamic_pointer_cast<NumberLit>(e)) return n->value;
     if (auto s = std::dynamic_pointer_cast<StringLit>(e)) return s->value;
     if (auto lq = std::dynamic_pointer_cast<LnQuote>(e)) return lq->value;
     if (auto c = std::dynamic_pointer_cast<CharLit>(e)) return c->value;
-    if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return id->name;
+    if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return inMin ? "-" + id->name : id->name;
 
     if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) {
         // Ownership symbol
@@ -95,8 +95,8 @@ static std::string emitExpr(const ExprPtr& e, const bool uns, std::string type) 
         }
         // Borrower symbol
         if (u->op == "&") {
-            // Borrows underlying raw pointer; safely dereferenced via .get()
-            return emitExpr(u->operand, uns) + ".get()";
+            // copies underlying raw pointer; safely dereferenced via make_unique<T>(*ptr)
+            return "std::make_unique<" + type + ">(*(" + emitExpr(u->operand, uns) + "))";
         }
         // Pointer symbol
         if (u->op == "*") {
@@ -105,7 +105,7 @@ static std::string emitExpr(const ExprPtr& e, const bool uns, std::string type) 
         }
         // idk
         if (u->op == "-") {
-            return "(-" + emitExpr(u->operand, uns) + ")";
+            return "(" + emitExpr(u->operand, uns, "", true) + ")";
         }
         // 'Not' boolian symbol
         if (u->op == "!") {
@@ -124,8 +124,8 @@ static std::string emitExpr(const ExprPtr& e, const bool uns, std::string type) 
     if (auto idx = std::dynamic_pointer_cast<IndexExpr>(e))
         return "(" + emitExpr(idx->base) + ")[" + emitExpr(idx->index) + "]";
 
-    if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return "(*" + pi->name + ")++";
-    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) return "(*" + pm->name + ")--";
+    if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return pi->name + ")++";
+    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) return pm->name + ")--";
 
     if (auto lit = std::dynamic_pointer_cast<ListLit>(e)) {
         std::string inner = "{";
@@ -390,12 +390,6 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         out << indent(depth) << emitExpr(es->expr) << ";\n";
         return;
     }
-    if (auto i = std::dynamic_pointer_cast<IfStmt>(stmt)) {
-        out << indent(depth) << "if (" << emitExpr(i->condition) << ") {\n";
-        emitBlock(i->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
     if (auto te = std::dynamic_pointer_cast<TryExcept>(stmt)) {
         // Reset status flag before execution so prior errors don't carry over
         if (te->hasExcept && !te->nec) {
@@ -435,14 +429,45 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
         }
         return;
     }
+    if (auto i = std::dynamic_pointer_cast<IfStmt>(stmt)) {
+        out << indent(depth) << "if (" << emitExpr(i->condition) << ") ";
+        out << (i->lik ? "[[likely]]" : "");
+        out << (i->unl ? "[[unlikely]]" : "");
+        out << " {\n";
+        emitBlock(i->body, depth + 1, out);
+        out << indent(depth) << "}\n";
+        if (i->iselif) {
+            out << indent(depth) << "else if (" << emitExpr(i->elifCond) << ") ";
+            out << (i->eilik ? "[[likely]]" : "");
+            out << (i->eiunl ? "[[unlikely]]" : "");
+            out << " {\n";
+            emitBlock(i->elifbody, depth + 1, out);
+            out << indent(depth) << "}\n";
+        }
+        if (i->iselse) {
+            out << indent(depth) << "else ";
+            out << (i->elik ? "[[likely]]" : "");
+            out << (i->eunl ? "[[unlikely]]" : "");
+            out << " {\n";
+            emitBlock(i->elsebody, depth + 1, out);
+            out << indent(depth) << "}\n";
+        }
+        return;
+    }
     if (auto e = std::dynamic_pointer_cast<ElifStmt>(stmt)) {
-        out << indent(depth) << "else if (" << emitExpr(e->condition) << ") {\n";
+        out << indent(depth) << "else if (" << emitExpr(e->condition) << ") ";
+        out << (e->lik ? "[[likely]]" : "");
+        out << (e->unl ? "[[unlikely]]" : "");
+        out << " {\n";
         emitBlock(e->body, depth + 1, out);
         out << indent(depth) << "}\n";
         return;
     }
     if (auto e = std::dynamic_pointer_cast<ElseStmt>(stmt)) {
-        out << indent(depth) << "else {\n";
+        out << indent(depth) << "else ";
+        out << (e->lik ? "[[likely]]" : "");
+        out << (e->unl ? "[[unlikely]]" : "");
+        out << " {\n";
         emitBlock(e->body, depth + 1, out);
         out << indent(depth) << "}\n";
         return;
@@ -463,6 +488,15 @@ static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
     }
     if (auto b = std::dynamic_pointer_cast<ClearStmt>(stmt)) {
         emitClearStmt(depth, out);
+        return;
+    }
+    if (auto d = std::dynamic_pointer_cast<DoStmt>(stmt)) {
+        out << indent(depth)
+            << "for (int cobalt_do_repeat = " << emitExpr(d->start)
+            << "; cobalt_do_depeat < " << emitExpr(d->end)
+            << "; ++cobalt_do_repeat) {\n";
+        emitBlock(d->body, depth+1 , out);
+        out << indent(depth) << "}\n";
         return;
     }
     if (auto cl = std::dynamic_pointer_cast<MethodCallExpr>(stmt)) {

@@ -185,10 +185,19 @@ ExprPtr Parser::parseAdditive() {
 // Parses a multiplicative expression (*, /)
 ExprPtr Parser::parseMultiplicative() {
     return parseBinaryLevel(
-        [this] { return parseUnary(); },
+        [this] { return parsePercent(); },
         [](TokenType t) -> std::string {
             if (t == TokenType::Star) return "*";
             if (t == TokenType::Slash) return "/";
+            return "";
+        });
+}
+
+ExprPtr Parser::parsePercent() {
+    return parseBinaryLevel(
+        [this] { return parseUnary(); },
+        [](TokenType t) -> std::string {
+            if (t == TokenType::Percent) return "%";
             return "";
         });
 }
@@ -238,6 +247,13 @@ ExprPtr Parser::parseUnary() {
 
         auto u = std::make_shared<UnaryExpr>();
         u->op = "*"; u->operand = operand;
+        return u;
+    }
+    if (check(TokenType::Minus)) { // Negation
+        advance();
+        ExprPtr operand = parseUnary();
+        auto u = std::make_shared<UnaryExpr>();
+        u->op = "-"; u->operand = operand;
         return u;
     }
 
@@ -598,12 +614,7 @@ StmtPtr Parser::parseVarDecl(int c) {
 }
 
 StmtPtr Parser::parseAssignOrExprStatement() {
-    if (auto amms = parseAssignAMMS()) {
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
-        return amms;
-    }
+    if (auto amms = parseAssignAMMS()) return amms;
 
     if (check(TokenType::Identifier) && current + 1 < tokens.size() &&
         tokens[current + 1].type == TokenType::Assign) {
@@ -616,9 +627,7 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         stmt->name = name;
         stmt->value = parseExpression();
         setVarState(name, VariableState::Active);
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
+        
         return stmt;
     }
 
@@ -635,9 +644,7 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         auto stmt = std::make_shared<ExprAssignStmt>();
         stmt->target = expr;
         stmt->value = parseExpression();
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
+        
         return stmt;
     }
 
@@ -647,9 +654,7 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         auto stmt = std::make_shared<ExprAssignStmt>();
         stmt->target = expr;
         stmt->value = parseExpression();
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
+        
         return stmt;
     } else if ((std::dynamic_pointer_cast<MethodMemberExpr>(expr) || std::dynamic_pointer_cast<IndexExpr>(expr))
         && check(TokenType::Assign)) {
@@ -657,15 +662,10 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         auto stmt = std::make_shared<ExprAssignStmt>();
         stmt->target = expr;
         stmt->value = parseExpression();
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
+        
         return stmt;
     }
 
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
     auto stmt = std::make_shared<ExprStmt>();
     stmt->expr = expr;
     return stmt;
@@ -674,20 +674,10 @@ StmtPtr Parser::parseAssignOrExprStatement() {
 StmtPtr Parser::parseReturn(std::string retype) {
     advance(); // 'ret'
     auto stmt = std::make_shared<ReturnStmt>();
-    if (retype != "void") {
-        if (!check(TokenType::Semicolon)) {
-            stmt->value = parseExpression();
-        }
-    }
-    else if (retype == "void") {
-        reportError("ret cannot be used in a void function.");
-    }
+    if (retype != "void") stmt->value = parseExpression();
+    else if (retype == "void") reportError("ret cannot be used in a void function.");
     else {
         reportError("Unknown return error.");
-        advance();
-    }
-
-    if (check(TokenType::Semicolon)) {
         advance();
     }
     return stmt;
@@ -696,28 +686,105 @@ StmtPtr Parser::parseReturn(std::string retype) {
 StmtPtr Parser::parseIf() {
     advance(); // 'if'
     auto stmt = std::make_shared<IfStmt>();
+
+    if (check(TokenType::Lt)) {
+        advance();
+        if (check(TokenType::ifl)) { 
+            stmt->lik = true;
+            advance(); 
+        }
+        else if(check(TokenType::ifu)) { 
+            stmt->unl = true;
+            advance(); 
+        }
+        else reportError("expected either 'likely' or 'unlikely'");
+        if (stmt->lik && stmt->unl) reportError("both 'likely' and 'unlikely' in the same if statements!");
+        expect(TokenType::Gt, ">");
+    }
     stmt->condition = parseExpression();
-    if (match(TokenType::ifl)) stmt->lik = true;
-    else if(match(TokenType::ifu)) stmt->unl = true;
-    if (check(TokenType::LBrace)) stmt->body = parseBlock("");
-    else stmt->body = parseInlineBlock("");
+    
+    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+
+    if (check(TokenType::Elif)) {
+        stmt->iselif = true;
+        advance(); // 'elif'
+        
+        if (check(TokenType::Lt)) {
+            advance();
+            if (check(TokenType::ifl)) { 
+                stmt->eilik = true;
+                advance(); 
+            }
+            else if(check(TokenType::ifu)) { 
+                stmt->eiunl = true;
+                advance(); 
+            }
+            else reportError("expected either 'likely' or 'unlikely'");
+            if (stmt->eilik && stmt->eiunl) reportError("both 'likely' and 'unlikely' in the same elif statements!");
+            expect(TokenType::Gt, ">");
+        }
+
+        stmt->elifCond = parseExpression();
+        
+        stmt->elifbody = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    }
+    if (check(TokenType::Else)) {
+        stmt->iselse = true;
+        advance(); // 'else'
+        
+        if (check(TokenType::Lt)) {
+            advance();
+            if (check(TokenType::ifl)) { 
+                stmt->elik = true;
+                advance(); 
+            }
+            else if(check(TokenType::ifu)) { 
+                stmt->eunl = true;
+                advance(); 
+            }
+            else reportError("expected either 'likely' or 'unlikely'");
+            if (stmt->elik && stmt->eunl) reportError("both 'likely' and 'unlikely' in the same else statements!");
+            expect(TokenType::Gt, ">");
+        }
+
+        stmt->elsebody = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    }
     return stmt;
 }
 
 StmtPtr Parser::parseElif() {
     advance(); // 'elif'
     auto stmt = std::make_shared<ElifStmt>();
+    
+    if (check(TokenType::Lt)) {
+        advance();
+        if (check(TokenType::ifl)) { stmt->lik = true; advance(); }
+        else if(check(TokenType::ifu)) { stmt->unl = true; advance(); }
+        else reportError("expected either 'likely' or 'unlikely'");
+        expect(TokenType::Gt, ">");
+    }
+
     stmt->condition = parseExpression();
-    if (check(TokenType::LBrace)) stmt->body = parseBlock("");
-    else stmt->body = parseInlineBlock("");
+    
+    if (stmt->lik && stmt->unl) reportError("both '%likely' and '%unlikely' in the same else if statements!");
+    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return stmt;
 }
 
 StmtPtr Parser::parseElse() {
     advance(); // 'else'
     auto stmt = std::make_shared<ElseStmt>();
-    if (check(TokenType::LBrace)) stmt->body = parseBlock("");
-    else stmt->body = parseInlineBlock("");
+    
+    if (check(TokenType::Lt)) {
+        advance();
+        if (check(TokenType::ifl)) { stmt->lik = true; advance(); }
+        else if(check(TokenType::ifu)) { stmt->unl = true; advance(); }
+        else reportError("expected either 'likely' or 'unlikely'");
+        expect(TokenType::Gt, ">");
+    }
+
+    if (stmt->lik && stmt->unl) reportError("both '%likely' and '%unlikely' in the same else statements!");
+    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return stmt;
 }
 
@@ -725,8 +792,7 @@ StmtPtr Parser::parseWhile() {
     advance(); // 'while'
     auto stmt = std::make_shared<WhileStmt>();
     stmt->condition = parseExpression();
-    if (check(TokenType::LBrace)) stmt->body = parseBlock("");
-    else stmt->body = parseInlineBlock("");
+    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return stmt;
 }
 
@@ -734,16 +800,14 @@ StmtPtr Parser::parseRepeat() {
     advance(); // repeat
     auto value = std::make_shared<RepeatCode>();
     value->value = parseExpression();
-    if (check(TokenType::LBrace)) value->body = parseBlock("");
-    else value->body = parseInlineBlock("");
+    value->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return value;
 }
 
 StmtPtr Parser::parseForever() {
     advance(); // forever
     auto stmt = std::make_shared<ForeverCode>();
-    if (check(TokenType::LBrace)) stmt->body = parseBlock("");
-    else stmt->body = parseInlineBlock("");
+    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return stmt;
 }
 
@@ -756,24 +820,22 @@ StmtPtr Parser::parseForRange() {
     stmt->varName = nameTok.text;
     stmt->condition = parseExpression();
     
-    if (check(TokenType::LBrace)) stmt->body = parseBlock("");
-    else stmt->body = parseInlineBlock("");
+    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return stmt;
 }
 
 StmtPtr Parser::parseTryExcept() {
     advance(); // 'try'
     auto stmt = std::make_shared<TryExcept>();
-    if (check(TokenType::LBrace)) stmt->tryBody = parseBlock("");
-    else stmt->tryBody = parseInlineBlock("");
+
+    stmt->tryBody = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
 
     if (match(TokenType::Except)) { // 'except'
         stmt->hasExcept = true;
         if (check(TokenType::LParen)) { stmt->exceptCond = parseExpression(); stmt->nec = false; }
         else stmt->nec = true;
 
-        if (check(TokenType::LBrace)) stmt->exceptBody = parseBlock("");
-        else stmt->exceptBody = parseInlineBlock("");
+        stmt->exceptBody = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     }
     return stmt;
 }
@@ -785,13 +847,9 @@ StmtPtr Parser::parsePrintCode() {
 
     auto stmt = std::make_shared<PrintCode>();
     stmt->newline = newline;
-    if (!check(TokenType::RParen)) {
-        stmt->value = parseExpression();
-    }
+    if (!check(TokenType::RParen)) stmt->value = parseExpression();
     expect(TokenType::RParen, ")");
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
+
     return stmt;
 }
 StmtPtr Parser::parsePrintMac() {
@@ -802,13 +860,9 @@ StmtPtr Parser::parsePrintMac() {
 
     auto stmt = std::make_shared<PrintMacCode>();
     stmt->newline = newline;
-    if (!check(TokenType::RParen)) {
-        stmt->value = parseMacExpression();
-    }
+    if (!check(TokenType::RParen)) stmt->value = parseMacExpression();
+
     expect(TokenType::RParen, ")");
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
     return stmt;
 }
 
@@ -820,21 +874,14 @@ StmtPtr Parser::parseReadCode() {
 
     ExprPtr firstOperand = parseLogicalOr();
 
-    if (check(TokenType::Shr)) {
-        stmt->target = parseUnary();
-    }
+    if (check(TokenType::Shr)) stmt->target = parseUnary();
     else if (std::dynamic_pointer_cast<NameExpr>(firstOperand) || std::dynamic_pointer_cast<MemberExpr>(firstOperand)) {
         // input(var) or input(Info.name)
         stmt->target = firstOperand;
     }
-    else {
-        reportError("expected a variable name inside input(...), like input(x) or input(\"prompt\" >> x)");
-    }
+    else [[unlikely]] reportError("expected a variable name inside input(...), like input(x) or input(\"prompt\" >> x)");
 
     expect(TokenType::RParen, ")");
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
     return stmt;
 }
 
@@ -856,11 +903,9 @@ StmtPtr Parser::parseReadLineCode() {
         // readln(var) or readln(Info.name)
         stmt->target = firstOperand;
     }
-    else {
-        reportError("expected a variable name inside readln(...), like readln(x) or readln(\"prompt\" >> x)");
-    }
+    else [[unlikely]] reportError("expected a variable name inside readln(...), like readln(x) or readln(\"prompt\" >> x)");
 
-    if (match(TokenType::Comma)) {
+    if (match(TokenType::Comma)) [[unlikely]] {
         // readln(..., 'limit')
         if (!check(TokenType::Char)) {
             reportError("expected a char literal for the limit in readln(..., limit)");
@@ -878,39 +923,35 @@ StmtPtr Parser::parseReadLineCode() {
     }
 
     expect(TokenType::RParen, ")");
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
     return stmt;
 }
 
 StmtPtr Parser::parseContinue() {
     advance(); // 'continue'
-    auto stmt = std::make_shared<ContinueStmt>();
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
-    return stmt;
+    return std::make_shared<ContinueStmt>();
 }
 
 StmtPtr Parser::parseBreak() {
     advance(); // 'break'
-    auto stmt = std::make_shared<BreakStmt>();
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
-    return stmt;
+    return std::make_shared<BreakStmt>();
 }
 
 StmtPtr Parser::parseClear() {
     advance(); // clear
-    auto stmt = std::make_shared<ClearStmt>();
+    return std::make_shared<ClearStmt>();
+}
 
-    if (check(TokenType::Semicolon)) {
-        advance();
-    }
+StmtPtr Parser::parseDo() {
+    advance(); // do
+    auto stmt = std::make_shared<DoStmt>();
+    stmt->start = parseExpression();
+    expect(TokenType::To, "to");
+
+    stmt->end = parseExpression();
+    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return stmt;
 }
+
 TypeDecl Parser::parseCTypeBody() {
     advance(); // 'ctype'
     TypeDecl decl;
@@ -935,14 +976,12 @@ TypeDecl Parser::parseCTypeBody() {
             advance();
             decl.secElemType = expectType();
         }
-        else {
-            decl.secElemType = decl.elemType;
-        }
+        else decl.secElemType = decl.elemType;
         expect(TokenType::Gt, ">");
 
         return decl;
     }
-    else if (check(TokenType::TypeVoid)) {
+    else if (check(TokenType::TypeVoid)) [[unlikely]] {
         reportError("ctype cannot be void.");
     }
     decl.type = expectType();
@@ -952,9 +991,6 @@ TypeDecl Parser::parseCTypeBody() {
         Token sizeTok = expect(TokenType::Number, "array size");
         decl.arraySize = std::atoi(sizeTok.text.c_str());
         expect(TokenType::RBracket, "]");
-    }
-    if (check(TokenType::Semicolon)) {
-        advance();
     }
     return decl;
 }
@@ -976,14 +1012,10 @@ std::vector<StmtPtr> Parser::parseCFBlock(std::string retype) {
         StmtPtr s = parseStatement(retype);
         if (s) stmts.push_back(s);
     }
-    if (check(TokenType::SClose)) {
-        advance(); // "};"
-    }
+    if (check(TokenType::SClose)) [[unlikely]] advance(); // "};"
     else {
         expect(TokenType::RBrace, "}");
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
+        if (check(TokenType::Semicolon)) [[unlikely]] advance();
     }
     popConst();
     popScope();
@@ -996,14 +1028,10 @@ std::vector<StmtPtr> Parser::parseSFBlock() {
         StmtPtr s = parseSStr();
         if (s) stmts.push_back(s);
     }
-    if (check(TokenType::SClose)) {
-        advance(); // "};"
-    }
+    if (check(TokenType::SClose)) [[unlikely]] advance(); // "};"
     else {
         expect(TokenType::RBrace, "}");
-        if (check(TokenType::Semicolon)) {
-            advance();
-        }
+        if (check(TokenType::Semicolon)) [[unlikely]] advance();
     }
     return stmts;
 }
@@ -1028,18 +1056,12 @@ StmtPtr Parser::parseCFunction() {
         } while (match(TokenType::Comma));
     }
     expect(TokenType::RParen, ")");
-    if (check(TokenType::Colon)) {
+    if (check(TokenType::Colon)) [[likely]] {
         advance();
         fn.returnType = expectType();
     }
-    else {
-        if (fn.name == "main") {
-            fn.returnType = "int";
-        }
-        else {
-            fn.returnType = "auto";
-        }
-    }
+    else [[unlikely]] fn.returnType = (fn.name == "main" ? "int" : "auto");
+
     fnd->returnType = fn.returnType;
     fnd->body = parseCFBlock(fn.returnType);
     fn.body = fnd->body;
@@ -1069,17 +1091,12 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
         } while (match(TokenType::Comma));
     }
     expect(TokenType::RParen, ")");
-    if (check(TokenType::Colon)) {
+    if (check(TokenType::Colon)) [[likely]] {
         advance();
         fn.returnType = expectType();
     }
-    else {
-        if (fn.name == "main") {
-            fn.returnType = "int";
-        }
-        else {
-            fn.returnType = "auto";
-        }
+    else [[unlikely]] {
+        fn.returnType = (fn.name == "main" ? "int" : "auto");
     }
     fnd->returnType = fn.returnType;
     fnd->body = parseCFBlock(fn.returnType);
@@ -1099,8 +1116,8 @@ StmtPtr Parser::parseStatement(std::string retype) {
     if (check(TokenType::Ret)) return parseReturn(retype);
     if (check(TokenType::Lambda)) return parseLambdaFn(retype);
     if (check(TokenType::If)) return parseIf();
-    if (check(TokenType::Elif)) return parseElif();
-    if (check(TokenType::Else)) return parseElse();
+    if (check(TokenType::Elif)) { reportError("'elif' without a preceding 'if'"); advance(); }
+    if (check(TokenType::Else)) { reportError("'else' without a preceding 'if'"); advance(); }
     if (check(TokenType::While)) return parseWhile();
     if (check(TokenType::For)) return parseForRange();
     if (check(TokenType::Print) || check(TokenType::PrintLine)) return parsePrintCode();
@@ -1116,6 +1133,7 @@ StmtPtr Parser::parseStatement(std::string retype) {
     if (check(TokenType::PrintMac) || check(TokenType::PrintMacLn)) return parsePrintMac();
     if (check(TokenType::CType)) return parseCType();
     if (check(TokenType::Try)) return parseTryExcept();
+    if (check(TokenType::Do)) return parseDo();
     
 
     reportError("unexpected token '" + peek().text + "'");
@@ -1343,7 +1361,7 @@ Use Parser::parseUse() {
         use.mode = 1;
     } else if (match(TokenType::Class)) {
         use.mode = 0;
-    } else {
+    } else [[unlikely]] {
         reportError("expected 'module' or 'class' after 'use'");
     }
     Token nameTok = expect(TokenType::Identifier, "module name");
@@ -1361,7 +1379,7 @@ AutoUse Parser::parseAutoUse() {
         autouse.mode = 1;
     } else if (match(TokenType::Class)) {
         autouse.mode = 0;
-    } else {
+    } else [[unlikely]] {
         reportError("expected 'module' or 'class' after 'autouse'");
     }
     Token libName= expect(TokenType::Identifier, "identifier");
@@ -1372,7 +1390,6 @@ AutoUse Parser::parseAutoUse() {
 bool Parser::parsenUse() {
     advance(); // '!use'
     expect(TokenType::Identifier, "identifier");
-    if (check(TokenType::Semicolon)) advance();
     return false;
 }
 
