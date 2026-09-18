@@ -12,8 +12,9 @@ inline void syncw_stdio(bool s) {
    std::ios_base::sync_with_stdio(s);
 }
 inline thread_local int cobalt__try_status__ = 0;
-inline int TryStatus() { return cobalt__try_status__; }int64_t __cobalt_if_end_lasttime = 0;
+inline int TryStatus() { return cobalt__try_status__; }
 
+#include "W:/Cobalt-Language/bin/lib/kern/kern.hpp"
 #include <csystem.hpp>
 #include <cotype.hpp>
 #include <fsys.hpp>
@@ -30,25 +31,7 @@ int main();
 
 int main() {
     syncw_stdio(false);
-    std::vector<int> i = {9, 0};
-    std::unique_ptr<std::vector<int>> o = std::make_unique<std::vector<decltype(8)>>(std::vector<int>{8, 8});
-    try {
-        for (auto&& on : (*(o))) {
-            io::writef(on);
-            io::writef("\n");
-        }
-    }
-    catch (...) {}
-    try {
-        for (auto&& h : i) {
-            io::writef(h);
-            io::writef("\n");
-        }
-    }
-    catch (...) {}
-    for (int __value__ = 0; __value__ < 5; __value__++) {
-        println_c("H");
-    }
+    println_c("{}", __cadd__(2, (3 * 4)));
     return 0;
 }
 

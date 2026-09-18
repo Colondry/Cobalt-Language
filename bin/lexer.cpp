@@ -20,7 +20,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"clear", TokenType::Clear}, {"ctype", TokenType::CType},
     {"notuse", TokenType::nUse}, {"const", TokenType::Constant},
     {"const_ptr", TokenType::ConstantPtr},
-    {"nptr", TokenType::DotNPointer},
+    {"nunique", TokenType::DotNPointer},
     {"unlikely", TokenType::ifu}, {"likely", TokenType::ifl},
     {"try", TokenType::Try}, {"except", TokenType::Except},
     {"do", TokenType::Do}, {"to", TokenType::To},
@@ -30,7 +30,8 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"or", TokenType::OrOr},
 
     // Data Types
-    {"List", TokenType::List},
+    {"list", TokenType::List},
+    {"vec", TokenType::TypeVector},
     {"int", TokenType::TypeInt},
     {"str", TokenType::TypeStr},
     {"string", TokenType::TypeString},

@@ -36,24 +36,20 @@
 
 namespace fs = std::filesystem;
 
-fs::path resolveExePath(const std::string& inputFile, const std::string& outputFile) {
-    std::string exeName = outputFile;
+fs::path resolveExePath(const std::string& src, std::string out) {
 #ifdef _WIN32
-    exeName += ".exe";
+    out += ".exe";
 #endif
-    fs::path folder = fs::path(inputFile).parent_path();
-    fs::path result = folder.empty() ? fs::path(exeName) : folder / exeName;
-    return result.lexically_normal();
+    return ((fs::path(src).parent_path()).empty() ?
+         fs::path(out) : (fs::path(src).parent_path()) / out)
+         .lexically_normal();
 }
 
-std::string toRunnableCommand(const fs::path& exePath) {
-    std::string p = exePath.string();
+std::string toRunnableCommand(fs::path path) {
 #ifndef _WIN32
-    if (exePath.parent_path().empty()) p = "./" + p;
+    path = path.parent_path().empty() ? "./" + path.string() : path;
 #endif
-    // Only quote if the path actually contains a space
-    if (p.find(' ') == std::string::npos) return p;
-    return "\"" + p + "\"";
+    return ((path.string().find(' ')) == std::string::npos ? path.string() : "\"" + path.string() + "\"");
 }
 
 int runSystemCommand(const std::string& command) {
@@ -309,6 +305,7 @@ void noCompile(const std::string& inputFile, const std::string& outputFile, bool
             std::exit(EXIT_FAILURE);
         }
         std::cout << ofile.rdbuf();
+        std::remove((targetPath.string() + ".cpp").c_str());
     }
 }
 

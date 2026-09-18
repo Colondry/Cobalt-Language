@@ -26,37 +26,21 @@ inline int TryStatus() { return cobalt__try_status__; }
 
 
 
+int square(int x);
+int sumOfSquares(int a, int b);
 int main();
+
+int square(int x) {
+    return ((*(x)) * (*(x)));
+}
+
+int sumOfSquares(int a, int b) {
+    return __cadd__(square(unwrap_val((*(a)))), square(unwrap_val((*(b)))));
+}
 
 int main() {
     syncw_stdio(false);
-    for (std::unique_ptr<int64_t> i = std::make_unique<int64_t>(0); *i.get() < 7; (*i)++) {
-    #pragma omp simd
-        println_c("{}", (*(i)));
-    }
-    std::unique_ptr<int> o = std::make_unique<int>(0);
-    for (int __value__ = 0; __value__ < 7; __value__++) {
-        println_c("{}", (*(o)));
-        (*o)++;
-    }
-    int8;
-    i = 0;
-    if (((*(i)) == 0)) [[likely]] {
-        println_c("i is 0");
-    }
-    else if (((*(i)) != 0))  {
-        (*i)++;
-    }
-    else [[unlikely]] {
-        (*i)--;
-    }
-    for (int cobalt_do_repeat = 0; cobalt_do_depeat < 7; ++cobalt_do_repeat) {
-        println_c("H");
-    }
-    println_c("{}", (176 % 98));
-    std::unique_ptr<int> x = std::make_unique<int>(8);
-    std::unique_ptr<int> xnef = std::make_unique<int>((-std::make_unique<>(*(x))));
-    println_c("{} {}", (*(x)), (*(xnef)));
+    println_c("{}", sumOfSquares(unwrap_val(6), unwrap_val(8)));
     return 0;
 }
 

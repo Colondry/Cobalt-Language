@@ -1,0 +1,8 @@
+@import <mathlib>
+@import <base>
+
+def main(): int {
+    nptr longer x = 1 * pow(10, -3) 
+    println!("{}", x)
+    ret 0
+}

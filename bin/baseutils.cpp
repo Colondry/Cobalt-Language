@@ -500,16 +500,15 @@ StmtPtr Parser::parseVarDecl(int c) {
         default: reportError("unknown parser panic! {" + std::to_string(c) + "} computing error");
     }
     if (check(TokenType::DotNPointer)) { decl->uns = true; advance(); }
-    else decl->uns = false;
     if (check(TokenType::Constant)) advance();
     if (check(TokenType::ConstantPtr)) { 
         decl->cptr = true; 
-        if (decl->uns && nptr) reportError("cannot use 'nptr' with 'const_ptr' at the same declaration!");
+        if (decl->uns && nptr) reportError("cannot use 'nunique' with 'const_ptr' at the same declaration!");
         else c = 3;
         advance();
     }
-    if (check(TokenType::List)) {
-        advance(); // 'List'
+    if (check(TokenType::List) || check(TokenType::TypeVector)) {
+        advance(); // 'List' or 'vector'
         decl->type = "List";
         expect(TokenType::Lt, "<");
         decl->elemType = expectType();

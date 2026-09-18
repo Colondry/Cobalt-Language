@@ -36,6 +36,7 @@ enum class TokenType {
     TypeLong, TypeInt8, TypeInt16, TypeInt32, TypeInt64,
     TypeLonger, TypeFloat16, TypeFloat32, TypeFloat64,
     TypeFloat128, TypeStr, TypeFILE, Constant, ConstantPtr,
+    TypeVector,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,

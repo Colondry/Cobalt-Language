@@ -1,6 +1,7 @@
 #include "codeGen.hpp"
 #include "flib.hpp"
 #include "Deadcode.hpp"
+#include "vgen.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -20,7 +21,7 @@ static std::vector<StmtPtr> pruneAndReport(const std::vector<StmtPtr>& body, con
     return pruned;
 }
 
-static std::string cppType(const std::string& t) {
+static std::string cppType(const std::string& t, const std::string& context = "") {
     if (t == "string") return "std::string";
     if (t == "byte") return "__byte__";
     if (t == "std::uint8_t") return "__byte__"; // uint8_t == unsigned char; stream it as a number, not a glyph
@@ -42,13 +43,11 @@ static std::string emitTypeDeclLine(const TypeDecl& t) {
     return "using " + t.name + " = " + cppType(t.type) + ";\n";
 }
 
-static std::string emitExpr(const ExprPtr& e, const bool uns = false, std::string type = "", const bool inMin = false);
-
 static std::string emitConcatPieces(const std::shared_ptr<ConcatExpr>& c) {
-    std::string out;
+    std::string out; CodeGenVisitor v;
     for (size_t i = 0; i < c->pieces.size(); i++) {
         if (i) out += " << ";
-        out += emitExpr(c->pieces[i]);
+        out += v.emitExpr(c->pieces[i]);
     }
     return out;
 }
@@ -80,147 +79,15 @@ static std::string emitCFSignature(const CFuncDecl& fn) {
     return out += ")";
 }
 
-static std::string emitExpr(const ExprPtr& e, const bool uns, std::string type, const bool inMin) {
-    if (auto n = std::dynamic_pointer_cast<NumberLit>(e)) return n->value;
-    if (auto s = std::dynamic_pointer_cast<StringLit>(e)) return s->value;
-    if (auto lq = std::dynamic_pointer_cast<LnQuote>(e)) return lq->value;
-    if (auto c = std::dynamic_pointer_cast<CharLit>(e)) return c->value;
-    if (auto id = std::dynamic_pointer_cast<NameExpr>(e)) return inMin ? "-" + id->name : id->name;
-
-    if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) {
-        // Ownership symbol
-        if (u->op == "$") {
-            // Transfers ownership; source unique_ptr becomes nullptr
-            return "std::move(" + emitExpr(u->operand, uns) + ")";
-        }
-        // Borrower symbol
-        if (u->op == "&") {
-            // copies underlying raw pointer; safely dereferenced via make_unique<T>(*ptr)
-            return "std::make_unique<" + type + ">(*(" + emitExpr(u->operand, uns) + "))";
-        }
-        // Pointer symbol
-        if (u->op == "*") {
-            // Protected using parenteheses '(*(<ExprPtr>))'
-            return "(*(" + emitExpr(u->operand, uns) + "))";
-        }
-        // idk
-        if (u->op == "-") {
-            return "(" + emitExpr(u->operand, uns, "", true) + ")";
-        }
-        // 'Not' boolian symbol
-        if (u->op == "!") {
-            return "(!" + emitExpr(u->operand, uns) + ")";
-        }
-    }
-
-    if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e)) {
-        if (b->op == "+") {
-            return "__cadd__(" + emitExpr(b->lhs, uns) + ", " + emitExpr(b->rhs) + ")";
-        }
-        return "(" + emitExpr(b->lhs, uns) + " " + b->op + " " + emitExpr(b->rhs) + ")";
-    }
-
-    // Dereference smart pointer before indexing
-    if (auto idx = std::dynamic_pointer_cast<IndexExpr>(e))
-        return "(" + emitExpr(idx->base) + ")[" + emitExpr(idx->index) + "]";
-
-    if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) return pi->name + ")++";
-    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) return pm->name + ")--";
-
-    if (auto lit = std::dynamic_pointer_cast<ListLit>(e)) {
-        std::string inner = "{";
-        for (size_t i = 0; i < lit->items.size(); i++) {
-            if (i) inner += ", ";
-            inner += emitExpr(lit->items[i]);
-        }
-        inner += "}";
-        if (!uns) return "std::make_unique<std::vector<decltype(" + 
-               (lit->items.empty() ? "0" : emitExpr(lit->items[0])) + ")>>(std::vector<" + type + ">" + inner + ")";
-        else return inner;
-    }
-
-    if (auto fl = std::dynamic_pointer_cast<FracLit>(e)) {
-        std::string inner = "{";
-        for (size_t i = 0; i < fl->items.size(); i++) {
-            if (i) inner += ", ";
-            inner += emitExpr(fl->items[i]);
-        }
-        inner += "}";
-        if (!uns) return "std::make_unique<frac>(" + inner + ")";
-        else return inner;
-    }
-
-    if (auto call = std::dynamic_pointer_cast<CallExpr>(e)) {
-        std::string out = call->callee + "(";
-        for (size_t i = 0; i < call->args.size(); i++) {
-            if (i) out += ", ";
-            // Parameters are plain T while locals are std::unique_ptr<T>; unwrap so the
-            // argument's runtime type actually matches what the callee expects.
-            out += "unwrap_val(" + emitExpr(call->args[i]) + ")";
-        }
-        return out + ")";
-    }
-
-    if (auto c = std::dynamic_pointer_cast<ConcatExpr>(e)) {
-        std::string out = "(";
-        for (size_t i = 0; i < c->pieces.size(); i++) {
-            if (i) out += " + ";
-            out += emitExpr(c->pieces[i]);
-        }
-        return out + ")";
-    }
-
-    if (auto m = std::dynamic_pointer_cast<MemberExpr>(e)) {
-        std::string obj = emitExpr(m->object);
-        return obj + "." + m->member;
-    }
-
-    if (auto mc = std::dynamic_pointer_cast<MethodCallExpr>(e)) {
-        std::string out = emitExpr(mc->object) + "." + mc->method + "(";
-        for (size_t i = 0; i < mc->args.size(); i++) {
-            if (i) out += ", ";
-            out += emitExpr(mc->args[i]);
-        }
-        return out + ")";
-    }
-
-    if (auto mm = std::dynamic_pointer_cast<NamespaceCallExpr>(e)) {
-        std::string out = emitExpr(mm->object) + "::" + mm->method + "(";
-        for (size_t i = 0; i < mm->args.size(); i++) {
-            if (i) out += ", ";
-            out += emitExpr(mm->args[i]);
-        }
-        return out + ")";
-    }
-
-    if (auto mem = std::dynamic_pointer_cast<MethodMemberExpr>(e)) {
-        return emitExpr(mem->object) + "::" + mem->member;
-    }
-
-    throw std::runtime_error("Unknown expression.");
-}
-
-// Helper function to emit unique_ptr wrapped initializers
-static std::string emitInitExpr(const std::string& typeStr, const ExprPtr& initExpr, const bool uns = false) {
-    if (!initExpr) return "nullptr";
-
-    if (auto u = std::dynamic_pointer_cast<UnaryExpr>(initExpr)) {
-        if (u->op == "$") return emitExpr(initExpr);
-    }
-
-    std::string val = emitExpr(initExpr);
-    if (!uns) return "std::make_unique<" + typeStr + ">(" + val + ")";
-    else return val;
-}
-
 static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
     out << indent(depth) << "std::cout";
+    CodeGenVisitor v;
     if (value) {
         if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value)) {
             out << " << " << emitConcatPieces(c);
         }
         else {
-            out << " << " << emitExpr(value);
+            out << " << " << v.emitExpr(value);
         }
     }
     if (newline) out << " << \"\\n\"";
@@ -228,15 +95,16 @@ static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::of
 }
 static void emitPrintMacStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
     out << indent(depth) << (newline ? "println_c(" : "print_c(");
+    CodeGenVisitor v;
     if (value) {
         if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value); c && !c->pieces.empty()) {
-            out << emitExpr(c->pieces[0]);
+            out << v.emitExpr(c->pieces[0]);
             for (size_t i = 1; i < c->pieces.size(); i++) {
-                out << ", " << emitExpr(c->pieces[i]);
+                out << ", " << v.emitExpr(c->pieces[i]);
             }
         }
         else {
-            out << emitExpr(value);
+            out << v.emitExpr(value);
         }
     }
     out << ");\n";
@@ -259,321 +127,19 @@ static void emitClearStmt(int depth, std::ofstream& out) {
 #endif
 }
 
-static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out);
-
-static void emitBlock(const std::vector<StmtPtr>& body, int depth, std::ofstream& out) {
-    for (const auto& s : body) emitStmt(s, depth, out);
-}
-
-static void emitStmt(const StmtPtr& stmt, int depth, std::ofstream& out) {
-    if (auto v = std::dynamic_pointer_cast<VarDecl>(stmt)) {
-        if (v->c) out << indent(depth) << "const ";
-        else out << indent(depth);
-
-        std::string cptr = "";
-        if (!v->uns) cptr = v->cptr ? "const " : "";
-
-        if (v->type == "List") {
-            std::string vecType = "std::vector<" + cppType(v->elemType) + ">";
-            if (!v->uns) out << "std::unique_ptr<" << cptr << vecType << "> " << v->name;
-            else out << vecType << " " << v->name;
-            out << " = " << (v->init ? emitExpr(v->init, v->uns, cppType(v->elemType)) : "nullptr") << ";\n";
-        }
-        else if (v->type == "Fraction") {
-            std::string fracType = "frac<" + cppType(v->elemType) + ", " + cppType(v->secElemType) + ">";
-            if (!v->uns) out << "std::unique_ptr<" << cptr << fracType << "> " << v->name;
-            else out << fracType << " " << v->name;
-            out << " = " << (v->init ? emitExpr(v->init, v->uns) : "nullptr") << ";\n";
-        }
-        else if (v->type == "auto") {
-            std::string init = emitExpr(v->init, v->uns);
-            if (!v->uns) out << "auto " << v->name << " = std::make_unique<" 
-                << cptr << "std::decay_t<decltype(" << init << ")>>(" << init << ");\n";
-            else out << "auto " << v->name << " = " << init << ";\n";
-        }
-        else {
-            std::string targetType = cppType(v->type);
-            if (!v->uns) out << "std::unique_ptr<" << cptr << targetType << "> " << v->name;
-            else out << targetType << " " << v->name;
-            out << " = " << emitInitExpr(targetType, v->init, v->uns) << ";\n";
-        }
-        return;
-    }
-
-    // Dereference target for input streams
-    if (auto in = std::dynamic_pointer_cast<ReadCode>(stmt)) {
-        if (in->prompt) {
-            out << indent(depth) << "std::cout << " << emitExpr(in->prompt) << ";\n";
-        }
-        out << indent(depth) << "std::cin >> (*" << emitExpr(in->target) << ");\n";
-        return;
-    }
-
-    // Dereference container for range-based loops
-    if (auto f = std::dynamic_pointer_cast<ForRangeStmt>(stmt)) {
-        if (f->shorte) {
-            std::string start = emitExpr(f->start);
-            std::string end = emitExpr(f->end);
-            out << indent(depth) << "__cobalt_if_end_lasttime = " << end;
-            out << indent(depth) << "for (int64_t " << f->varName << " = " << start 
-                << "; " << f->varName << " < __cobalt_if_end_lasttime; " << f->varName << "++) {\n";
-            emitBlock(f->body, depth + 1, out);
-            out << indent(depth) << "}\n";
-            return;
-        }
-        if (auto call = std::dynamic_pointer_cast<CallExpr>(f->condition)) {
-            if (call->callee == "range" && call->args.size() == 2) {
-                std::string start = emitExpr(call->args[0]);
-                std::string end = emitExpr(call->args[1]);
-                out << indent(depth) << "for (std::unique_ptr<int64_t> " << f->varName << " = std::make_unique<int64_t>(" << start 
-                    << "); *" << f->varName << ".get() < " << end << "; (*" << f->varName << ")++) {\n";
-                if (std::stoi(end) < 100) out << indent(depth) << "#pragma omp simd\n";
-                emitBlock(f->body, depth + 1, out);
-                out << indent(depth) << "}\n";
-                return;
-            }
-        }
-        out << indent(depth) << "for (auto&& " << f->varName << " : " << emitExpr(f->condition) << ") {\n";
-        emitBlock(f->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-
-    /* PRINT DEPRECEATED
-    if (auto p = std::dynamic_pointer_cast<PrintCode>(stmt)) {
-        out << indent(depth) << "std::cout";
-        if (p->value) {
-            out << " << (*" << emitExpr(p->value) << ")";
-        }
-        if (p->newline) out << " << \"\\n\"";
-        out << ";\n";
-        return;
-    }
-   */
-
-    if (auto t = std::dynamic_pointer_cast<TypeDecl>(stmt)) {
-        out << indent(depth) << emitTypeDeclLine(*t);
-        return;
-    }
-    if (auto f = std::dynamic_pointer_cast<CFDecl>(stmt)) {
-        out << indent(depth) << emitCFDSignature(*f) << " {\n";
-        emitBlock(pruneAndReport(f->body, "method '" + f->name + "'"), depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto a = std::dynamic_pointer_cast<AssignStmt>(stmt)) {
-        out << indent(depth) << a->name << " = " << emitExpr(a->value) << ";\n";
-        return;
-    }
-    if (auto ea = std::dynamic_pointer_cast<ExprAssignStmt>(stmt)) {
-        out << indent(depth) << emitExpr(ea->target) << " = " << emitExpr(ea->value) << ";\n";
-        return;
-    }
-    if (auto r = std::dynamic_pointer_cast<ReturnStmt>(stmt)) {
-        out << indent(depth) << "return" << (r->value ? " " + emitExpr(r->value) : "") << ";\n";
-        return;
-    }
-    if (auto p = std::dynamic_pointer_cast<PrintMacCode>(stmt)) {
-        emitPrintMacStmt(p->value, p->newline, depth, out);
-        return;
-    }
-    if (auto inStr = std::dynamic_pointer_cast<ReadLine>(stmt)) {
-        out << indent(depth);
-        out << "readln(" << emitExpr(inStr->prompt) << ", " << emitExpr(inStr->target);
-        if (!inStr->limit.empty()) {
-            out << ", '" << inStr->limit << "'";
-        }
-        out << ");\n";
-        return;
-    }
-    if (auto es = std::dynamic_pointer_cast<ExprStmt>(stmt)) {
-        out << indent(depth) << emitExpr(es->expr) << ";\n";
-        return;
-    }
-    if (auto te = std::dynamic_pointer_cast<TryExcept>(stmt)) {
-        // Reset status flag before execution so prior errors don't carry over
-        if (te->hasExcept && !te->nec) {
-            out << indent(depth) << "cobalt__try_status__ = 0;\n";
-        }
-
-        // Emit Try Body
-        out << indent(depth) << "try {\n";
-        emitBlock(te->tryBody, depth + 1, out);
-        out << indent(depth) << "}\n";
-
-        if (!te->hasExcept) {
-            // Bare 'try' with no 'except' clause at all -- just swallow the exception.
-            out << indent(depth) << "catch (...) {}\n";
-        }
-        // Emit Exception Handling
-        else if (!te->nec) {
-            // Conditional Status Handling
-            out << indent(depth) << "catch (const std::exception& e) {\n";
-            out << indent(depth + 1) << "cobalt__try_status__ = 1;\n";
-            out << indent(depth) << "} catch (...) {\n";
-            out << indent(depth + 1) << "cobalt__try_status__ = 1;\n";
-            out << indent(depth) << "}\n";
-
-            // Evaluate condition after trapped execution
-            out << indent(depth) << "if (" << emitExpr(te->exceptCond) << ") {\n";
-            emitBlock(te->exceptBody, depth + 1, out);
-            out << indent(depth) << "}\n";
-        } 
-        else {
-            // Standard Catch-All
-            out << indent(depth) << "catch (const std::exception& e) {\n";
-            emitBlock(te->exceptBody, depth + 1, out);
-            out << indent(depth) << "} catch (...) {\n";
-            emitBlock(te->exceptBody, depth + 1, out);
-            out << indent(depth) << "}\n";
-        }
-        return;
-    }
-    if (auto i = std::dynamic_pointer_cast<IfStmt>(stmt)) {
-        out << indent(depth) << "if (" << emitExpr(i->condition) << ") ";
-        out << (i->lik ? "[[likely]]" : "");
-        out << (i->unl ? "[[unlikely]]" : "");
-        out << " {\n";
-        emitBlock(i->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        if (i->iselif) {
-            out << indent(depth) << "else if (" << emitExpr(i->elifCond) << ") ";
-            out << (i->eilik ? "[[likely]]" : "");
-            out << (i->eiunl ? "[[unlikely]]" : "");
-            out << " {\n";
-            emitBlock(i->elifbody, depth + 1, out);
-            out << indent(depth) << "}\n";
-        }
-        if (i->iselse) {
-            out << indent(depth) << "else ";
-            out << (i->elik ? "[[likely]]" : "");
-            out << (i->eunl ? "[[unlikely]]" : "");
-            out << " {\n";
-            emitBlock(i->elsebody, depth + 1, out);
-            out << indent(depth) << "}\n";
-        }
-        return;
-    }
-    if (auto e = std::dynamic_pointer_cast<ElifStmt>(stmt)) {
-        out << indent(depth) << "else if (" << emitExpr(e->condition) << ") ";
-        out << (e->lik ? "[[likely]]" : "");
-        out << (e->unl ? "[[unlikely]]" : "");
-        out << " {\n";
-        emitBlock(e->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto e = std::dynamic_pointer_cast<ElseStmt>(stmt)) {
-        out << indent(depth) << "else ";
-        out << (e->lik ? "[[likely]]" : "");
-        out << (e->unl ? "[[unlikely]]" : "");
-        out << " {\n";
-        emitBlock(e->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto w = std::dynamic_pointer_cast<WhileStmt>(stmt)) {
-        out << indent(depth) << "while (" << emitExpr(w->condition) << ") {\n";
-        emitBlock(w->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto c = std::dynamic_pointer_cast<ContinueStmt>(stmt)) {
-        emitContinueStmt(depth, out);
-        return;
-    }
-    if (auto b = std::dynamic_pointer_cast<BreakStmt>(stmt)) {
-        emitBreakStmt(depth, out);
-        return;
-    }
-    if (auto b = std::dynamic_pointer_cast<ClearStmt>(stmt)) {
-        emitClearStmt(depth, out);
-        return;
-    }
-    if (auto d = std::dynamic_pointer_cast<DoStmt>(stmt)) {
-        out << indent(depth)
-            << "for (int cobalt_do_repeat = " << emitExpr(d->start)
-            << "; cobalt_do_depeat < " << emitExpr(d->end)
-            << "; ++cobalt_do_repeat) {\n";
-        emitBlock(d->body, depth+1 , out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto cl = std::dynamic_pointer_cast<MethodCallExpr>(stmt)) {
-        out << indent(depth);
-        out << emitExpr(cl->object);
-        out << ".";
-        out << cl->method;
-        out << "(";
-
-        for (size_t i = 0; i < cl->args.size(); i++)
-        {
-            if (i) out << ", ";
-            out << emitExpr(cl->args[i]);
-        }
-
-        out << ");\n";
-        return;
-    }
-    if (auto nc = std::dynamic_pointer_cast<NamespaceCallExpr>(stmt)) {
-        out << indent(depth);
-        out << emitExpr(nc->object);
-        out << "::";
-        out << nc->method;
-        out << "(";
-
-        for (size_t i = 0; i < nc->args.size(); i++)
-        {
-            if (i) out << ", ";
-            out << emitExpr(nc->args[i]);
-        }
-
-        out << ");\n";
-        return;
-    }
-    if (auto rp = std::dynamic_pointer_cast<RepeatCode>(stmt)) {
-        out << indent(depth)
-            << "for (int __value__ = 0; __value__ < "
-            << emitExpr(rp->value)
-            << "; __value__++) {\n";
-        emitBlock(rp->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto fr = std::dynamic_pointer_cast<ForeverCode>(stmt)) {
-        out << indent(depth) << "while (true) {\n";
-        emitBlock(fr->body, depth + 1, out);
-        out << indent(depth) << "}\n";
-        return;
-    }
-    if (auto lfn = std::dynamic_pointer_cast<LambFuncDecl>(stmt)) {
-        out << indent(depth) << emitLambSignature(*lfn) << " {\n";
-        emitBlock(pruneAndReport(lfn->body, "lambda '" + lfn->name + "'"), depth + 1, out);
-        out << indent(depth) << "};\n";
-        return;
-    }
-
-    std::cerr << "codeGen error: no emitter for this statement type.\n";
-    std::exit(EXIT_FAILURE);
-}
-
 
 static std::string emitSignature(const FunctionDecl& fn) {
     std::string out = cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
-        out += cppType(fn.params[i].type) + " " + fn.params[i].name;
+        out += cppType(fn.params[i].type, "param") + " " + fn.params[i].name;
     }
     return out += ")";
 }
 
 void codeGen(Program& program, std::string fileName, const std::string& inputFileDir) {
-    std::string outcpp = fileName + ".cpp";
-    std::ofstream file(outcpp);
-    if (!file) {
-        std::cerr << "Cannot create " << outcpp << ".\n";
-        std::exit(EXIT_FAILURE);
-    }
+    std::ofstream file(fileName + ".cpp");
+    if (!file) { std::cerr << "Cannot create " << (fileName + ".cpp") << ".\n"; std::exit(EXIT_FAILURE); }
 
     file << "#include <iostream>\n";
     file << "#include <vector>\n";
@@ -642,62 +208,36 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         file << "#include <cstdio>\n";
     }
     file << "\n";
-
+    CodeGenVisitor cg;
     for (const TypeDecl& td : program.typedefs) {
-        file << emitTypeDeclLine(td);
+        file << cg.emitStmt(std::make_shared<TypeDecl>(td), 0);
     }
     for (const ModuleDecl& module : program.modules) {
         file << "namespace " << module.name << " {\n";
-        emitBlock(module.body, 1, file);
+        file << cg.emitBlock(module.body, 1);
         file << "}\n";
     }
 
     for (const ClassDecl& cls : program.classes) {
         file << "class " << cls.name << " {\n";
-        if (cls.pub) {
-            file << "public:\n";
-            emitBlock(cls.publicBody, 1, file);
-        }
-        if (cls.pvr) {
-            file << "private:\n";
-            emitBlock(cls.privateBody, 1, file);
-        }
+        if (cls.pub) file << "public:\n" << cg.emitBlock(cls.publicBody, 1);
+        if (cls.pvr) file << "private:\n" << cg.emitBlock(cls.privateBody, 1);
         file << "};\n";
     }
-
-    for (const StructCode& str : program.struc) {
-        file << "struct " << str.name << " {\n";
-        emitBlock(str.body, 1, file);
-        file << "};\n";
-    }
-
-    for (const ClassDecl& cls : program.classes) {
-        file << cls.name << " " << cls.name << ";\n";
-    }
-
+    for (const StructCode& str : program.struc) file << "struct " << str.name << " {\n" << cg.emitBlock(str.body, 1) << "};\n";
+    for (const ClassDecl& cls : program.classes) file << cls.name << " " << cls.name << ";\n";
     for (const AutoUse& au : program.autouses) {
-        if (au.mode == 0) {
-            file << au.libName << " " << au.libName << ";\n";
-        } else {
-            file << "using namespace " << au.libName << ";\n";
-        }
+        if (au.mode == 0) [[unlikely]] file << au.libName << " " << au.libName << ";\n";
+        else file << "using namespace " << au.libName << ";\n";
     }
-
     file << "\n";
 
     for (const Use& u : program.uses) {
-        if (u.mode == 0) {
-            file << u.first << " " << u.second << ";\n";
-        } else {
-            file << "namespace " << u.first << " = " << u.second << ";\n";
-        }
+        if (u.mode == 0) file << u.first << " " << u.second << ";\n";
+        else file << "namespace " << u.first << " = " << u.second << ";\n";
     }
-
     file << "\n";
-
-    for (const FunctionDecl& fn : program.functions) {
-        file << emitSignature(fn) << ";\n";
-    }
+    for (const FunctionDecl& fn : program.functions) file << emitSignature(fn) << ";\n";
     file << "\n";
     for (auto& obj : program.usedObjects)
     {
@@ -712,17 +252,12 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     }
 
     for (const CFuncDecl& cfnd : program.cfunctions) {
-        file << emitCFSignature(cfnd) << " {\n";
-        emitBlock(pruneAndReport(cfnd.body, "function '" + cfnd.name + "'"), 1, file);
-        file << "}\n\n";
+        file << emitCFSignature(cfnd) << " {\n" << cg.emitBlock(pruneAndReport(cfnd.body, "function '" + cfnd.name + "'"), 1) << "}\n\n";
     }
 
     for (const FunctionDecl& fn : program.functions) {
         file << emitSignature(fn) << " {\n";
-        if (fn.name == "main") {
-            file << indent(1) << "syncw_stdio(false);\n";
-        }
-        emitBlock(pruneAndReport(fn.body, "function '" + fn.name + "'"), 1, file);
-        file << "}\n\n";
+        if (fn.name == "main") file << indent(1) << "syncw_stdio(false);\n";
+        file << cg.emitBlock(pruneAndReport(fn.body, "function '" + fn.name + "'"), 1) << "}\n\n";
     }
 }
