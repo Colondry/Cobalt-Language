@@ -78,12 +78,14 @@ static void collectUsesInBlock(const std::vector<StmtPtr>& body, std::unordered_
             }
             collectUsesInBlock(f->body, used);
         }
+        else if (auto d = std::dynamic_pointer_cast<DoStmt>(s))          { collectUses(d->start, used); collectUses(d->end, used); collectUsesInBlock(d->body, used); }
         else if (auto rp = std::dynamic_pointer_cast<RepeatCode>(s))     { collectUses(rp->value, used); collectUsesInBlock(rp->body, used); }
         else if (auto fr = std::dynamic_pointer_cast<ForeverCode>(s))    collectUsesInBlock(fr->body, used);
         else if (auto te = std::dynamic_pointer_cast<TryExcept>(s))      { collectUsesInBlock(te->tryBody, used); 
                                                                            collectUsesInBlock(te->exceptBody, used);
                                                                            collectUses(te->exceptCond, used);
                                                                          }
+
         // CFDecl / LambFuncDecl (nested fn decls) intentionally left alone
     }
 }
