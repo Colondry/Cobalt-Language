@@ -529,16 +529,10 @@ StmtPtr Parser::parseVarDecl(int c) {
                 }
             }
             expect(TokenType::RBracket, "]");
-            if (check(TokenType::Semicolon)) {
-                advance();
-            }
             decl->init = lit;
         }
         else {
             reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
-            if (check(TokenType::Semicolon)) {
-                advance();
-            }
         }
         return decl;
     }
@@ -580,16 +574,10 @@ StmtPtr Parser::parseVarDecl(int c) {
                 }
             }
             expect(TokenType::RBracket, "]");
-            if (check(TokenType::Semicolon)) {
-                advance();
-            }
             decl->init = lit;
         }
         else {
             reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
-            if (check(TokenType::Semicolon)) {
-                advance();
-            }
         }
         return decl;
     }
@@ -608,15 +596,27 @@ StmtPtr Parser::parseVarDecl(int c) {
     }
     if (match(TokenType::Assign)) decl->init = parseExpression();
     else reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
-    if (check(TokenType::Semicolon)) advance();
     return decl;
 }
 
 StmtPtr Parser::parseAssignOrExprStatement() {
     if (auto amms = parseAssignAMMS()) return amms;
-
+    bool con, cptr, uns = false;
+    if (check(TokenType::DotNPointer)) {
+        uns = true; advance();
+    }
+    if (check(TokenType::Constant)) {
+        con = true; advance();
+    }
+    if (check(TokenType::ConstantPtr)) {
+        cptr = true; advance();
+    }
+    bool dec = false;
     if (check(TokenType::Identifier) && current + 1 < tokens.size() &&
         tokens[current + 1].type == TokenType::Assign) {
+        if (uns || con || cptr) {
+            reportError("Cannot use 'nunique', 'const', or 'const_ptr' in an assignment statement. These are only valid in variable declarations.");
+        }
         std::string name = advance().text;
         advance(); // '='
         if (getVarConstState(name) == VariableConst::Constant) {
@@ -627,6 +627,55 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         stmt->value = parseExpression();
         setVarState(name, VariableState::Active);
         
+        return stmt;
+    }
+    else if (check(TokenType::Identifier) && current + 1 < tokens.size() &&
+        tokens[current + 1].type == TokenType::DoubleColon_Assign) {
+        std::string name = advance().text;
+        advance(); // ':='
+        auto stmt = std::make_shared<VarDecl>();
+        stmt->name = name;
+        stmt->uns = uns; stmt->c = con; stmt->cptr = cptr;
+        stmt->init = parseExpression();
+        if (auto strExpr = std::dynamic_pointer_cast<StringLit>(stmt->init)) {
+            stmt->type = "c_string";
+        }
+        else if (auto numExpr = std::dynamic_pointer_cast<NumberLit>(stmt->init)) {
+            stmt->type = "long long";
+        }
+        else if (auto fracExpr = std::dynamic_pointer_cast<FracLit>(stmt->init)) {
+            stmt->type = "Fraction";
+        }
+        else if (auto listExpr = std::dynamic_pointer_cast<ListLit>(stmt->init)) {
+            stmt->type = "List";
+        }
+        else if (auto nameExpr = std::dynamic_pointer_cast<NameExpr>(stmt->init)) {
+            stmt->type = "auto";
+        }
+        setVarState(name, VariableState::Active);
+        return stmt;
+    }
+    else if (check(TokenType::Identifier) && current + 1 < tokens.size() &&
+        tokens[current + 1].type == TokenType::AssignMinus) {
+        if (uns || con || cptr) {
+            reportError("Cannot use 'nunique', 'const', or 'const_ptr' in an assignment statement. These are only valid in variable declarations.");
+        }
+        std::string name = advance().text;
+        advance(); // '-='
+        if (getVarConstState(name) == VariableConst::Constant) {
+            reportError("Cannot reassign 'const' variable '" + name + "'");
+        }
+        auto stmt = std::make_shared<AssignStmt>();
+        stmt->name = name;
+        auto binary = std::make_shared<BinaryExpr>();
+        binary->op = "-";
+        auto nameExpr = std::make_shared<NameExpr>();
+        nameExpr->name = name;
+        binary->lhs = nameExpr;
+        binary->rhs = parseExpression();
+        stmt->value = binary;
+        
+        setVarState(name, VariableState::Active);
         return stmt;
     }
 
@@ -701,8 +750,14 @@ StmtPtr Parser::parseIf() {
         expect(TokenType::Gt, ">");
     }
     stmt->condition = parseExpression();
-    
-    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    if (check(TokenType::LBrace)) {
+        stmt->body = parseBlock(""); advance();
+    } else if (check(TokenType::Do)) {
+        advance(); // 'do'
+        stmt->body = parseInlineBlock("");
+    } else {
+        reportError("expected '{' or 'do' after if condition");
+    }
 
     if (check(TokenType::Elif)) {
         stmt->iselif = true;
@@ -725,7 +780,14 @@ StmtPtr Parser::parseIf() {
 
         stmt->elifCond = parseExpression();
         
-        stmt->elifbody = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+        if (check(TokenType::LBrace)) {
+            stmt->elifbody = parseBlock(""); advance();
+        } else if (check(TokenType::Do)) {
+            advance(); // 'do'
+            stmt->elifbody = parseInlineBlock("");
+        } else {
+            reportError("expected '{' or 'do' after an elif condition");
+        }
     }
     if (check(TokenType::Else)) {
         stmt->iselse = true;
@@ -746,44 +808,15 @@ StmtPtr Parser::parseIf() {
             expect(TokenType::Gt, ">");
         }
 
-        stmt->elsebody = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+        if (check(TokenType::LBrace)) {
+            stmt->elsebody = parseBlock(""); advance();
+        } else if (check(TokenType::Do)) {
+            advance(); // 'do'
+            stmt->elsebody = parseInlineBlock("");
+        } else {
+            reportError("expected '{' or 'do' after an else condition");
+        }
     }
-    return stmt;
-}
-
-StmtPtr Parser::parseElif() {
-    advance(); // 'elif'
-    auto stmt = std::make_shared<ElifStmt>();
-    
-    if (check(TokenType::Lt)) {
-        advance();
-        if (check(TokenType::ifl)) { stmt->lik = true; advance(); }
-        else if(check(TokenType::ifu)) { stmt->unl = true; advance(); }
-        else reportError("expected either 'likely' or 'unlikely'");
-        expect(TokenType::Gt, ">");
-    }
-
-    stmt->condition = parseExpression();
-    
-    if (stmt->lik && stmt->unl) reportError("both '%likely' and '%unlikely' in the same else if statements!");
-    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
-    return stmt;
-}
-
-StmtPtr Parser::parseElse() {
-    advance(); // 'else'
-    auto stmt = std::make_shared<ElseStmt>();
-    
-    if (check(TokenType::Lt)) {
-        advance();
-        if (check(TokenType::ifl)) { stmt->lik = true; advance(); }
-        else if(check(TokenType::ifu)) { stmt->unl = true; advance(); }
-        else reportError("expected either 'likely' or 'unlikely'");
-        expect(TokenType::Gt, ">");
-    }
-
-    if (stmt->lik && stmt->unl) reportError("both '%likely' and '%unlikely' in the same else statements!");
-    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
     return stmt;
 }
 
@@ -953,45 +986,45 @@ StmtPtr Parser::parseDo() {
 
 TypeDecl Parser::parseCTypeBody() {
     advance(); // 'ctype'
-    TypeDecl decl;
+    auto decl = std::make_shared<TypeDecl>();
     Token nameTok = expect(TokenType::Identifier, "type name");
-    decl.name = nameTok.text;
+    decl->name = nameTok.text;
     ctypeNames.insert(nameTok.text);
     expect(TokenType::Assign, "=");
     if (check(TokenType::List)) {
         advance(); // 'List'
-        decl.type = "List";
+        decl->type = "List";
         expect(TokenType::Lt, "<");
-        decl.elemType = expectType();
+        decl->elemType = expectType();
         expect(TokenType::Gt, ">");
-        return decl;
+        return *decl;
     }
     else if (check(TokenType::TypeFrac)) {
         advance(); // 'frac'
-        decl.type = "Fraction";
+        decl->type = "Fraction";
         expect(TokenType::Lt, "<");
-        decl.elemType = expectType();
+        decl->elemType = expectType();
         if (check(TokenType::Comma)) {
             advance();
-            decl.secElemType = expectType();
+            decl->secElemType = expectType();
         }
-        else decl.secElemType = decl.elemType;
+        else decl->secElemType = decl->elemType;
         expect(TokenType::Gt, ">");
 
-        return decl;
+        return *decl;
     }
     else if (check(TokenType::TypeVoid)) [[unlikely]] {
         reportError("ctype cannot be void.");
     }
-    decl.type = expectType();
-    decl.name = nameTok.text;
+    decl->type = expectType();
+    decl->name = nameTok.text;
 
     if (match(TokenType::LBracket)) {
         Token sizeTok = expect(TokenType::Number, "array size");
-        decl.arraySize = std::atoi(sizeTok.text.c_str());
+        decl->arraySize = std::atoi(sizeTok.text.c_str());
         expect(TokenType::RBracket, "]");
     }
-    return decl;
+    return *decl;
 }
 
 StmtPtr Parser::parseCType() {
@@ -1040,9 +1073,8 @@ StmtPtr Parser::parseCFunction() {
     Token nameTok = expect(TokenType::Identifier, "function name");
     expect(TokenType::LParen, "(");
 
-    CFuncDecl fn;
     auto fnd = std::make_shared<CFDecl>();
-    fn.name = nameTok.text; fnd->name = nameTok.text;
+    fnd->name = nameTok.text;
     pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
     pushConst();
     if (!check(TokenType::RParen)) {
@@ -1051,19 +1083,17 @@ StmtPtr Parser::parseCFunction() {
             p.type = expectType();
             p.name = expect(TokenType::Identifier, "parameter name").text;
             declareVar(p.name);
-            fn.params.push_back(p); fnd->params.push_back(p);
+            fnd->params.push_back(p);
         } while (match(TokenType::Comma));
     }
     expect(TokenType::RParen, ")");
     if (check(TokenType::Colon)) [[likely]] {
         advance();
-        fn.returnType = expectType();
+        fnd->returnType = expectType();
     }
-    else [[unlikely]] fn.returnType = (fn.name == "main" ? "int" : "auto");
+    else [[unlikely]] fnd->returnType = (fnd->name == "main" ? "int" : "auto");
 
-    fnd->returnType = fn.returnType;
-    fnd->body = parseCFBlock(fn.returnType);
-    fn.body = fnd->body;
+    fnd->body = parseCFBlock(fnd->returnType);
     popConst();
     popScope();
 
@@ -1075,9 +1105,8 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
     Token nameTok = expect(TokenType::Identifier, "function name");
     expect(TokenType::LParen, "(");
 
-    LambFuncDecl fn;
     auto fnd = std::make_shared<LambFuncDecl>();
-    fn.name = nameTok.text; fnd->name = nameTok.text;
+    fnd->name = nameTok.text;
     pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
     pushConst();
     if (!check(TokenType::RParen)) {
@@ -1086,20 +1115,18 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
             p.type = expectType();
             p.name = expect(TokenType::Identifier, "parameter name").text;
             declareVar(p.name);
-            fn.params.push_back(p); fnd->params.push_back(p);
+            fnd->params.push_back(p);
         } while (match(TokenType::Comma));
     }
     expect(TokenType::RParen, ")");
     if (check(TokenType::Colon)) [[likely]] {
         advance();
-        fn.returnType = expectType();
+        fnd->returnType = expectType();
     }
     else [[unlikely]] {
-        fn.returnType = (fn.name == "main" ? "int" : "auto");
+        fnd->returnType = (fnd->name == "main" ? "int" : "auto");
     }
-    fnd->returnType = fn.returnType;
-    fnd->body = parseCFBlock(fn.returnType);
-    fn.body = fnd->body;
+    fnd->body = parseCFBlock(fnd->returnType);
     popConst();
     popScope();
 

@@ -1,6 +1,3 @@
-#ifndef ACCEPT_HPP
-#define ACCEPT_HPP
-
 #include "ast.hpp"
 #include "visitor.hpp"
 #include <string>
@@ -52,5 +49,3 @@ std::string ForRangeStmt::accept(StmtVisitor& v)       { return v.visit(*this); 
 std::string TryExcept::accept(StmtVisitor& v)          { return v.visit(*this); }
 std::string CFuncDecl::accept(StmtVisitor& v)          { return v.visit(*this); }
 std::string LambFuncDecl::accept(StmtVisitor& v)       { return v.visit(*this); }
-
-#endif

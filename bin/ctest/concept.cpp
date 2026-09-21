@@ -26,21 +26,12 @@ inline int TryStatus() { return cobalt__try_status__; }
 
 
 
-int square(int x);
-int sumOfSquares(int a, int b);
 int main();
-
-int square(int x) {
-    return ((*(x)) * (*(x)));
-}
-
-int sumOfSquares(int a, int b) {
-    return __cadd__(square(unwrap_val((*(a)))), square(unwrap_val((*(b)))));
-}
 
 int main() {
     syncw_stdio(false);
-    println_c("{}", sumOfSquares(unwrap_val(6), unwrap_val(8)));
+    std::unique_ptr<long long> num = std::make_unique<long long>(98);
+    std::cout << (*(num)) << "\n";
     return 0;
 }
 

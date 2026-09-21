@@ -21,15 +21,6 @@ static std::vector<StmtPtr> pruneAndReport(const std::vector<StmtPtr>& body, con
     return pruned;
 }
 
-static std::string cppType(const std::string& t, const std::string& context = "") {
-    if (t == "string") return "std::string";
-    if (t == "byte") return "__byte__";
-    if (t == "std::uint8_t") return "__byte__"; // uint8_t == unsigned char; stream it as a number, not a glyph
-    return t;
-}
-
-static std::string indent(int depth) { return std::string(depth * 4, ' '); }
-
 static std::string emitTypeDeclLine(const TypeDecl& t) {
     if (t.type == "List") {
         return "using " + t.name + " = std::vector<" + cppType(t.elemType) + ">;\n";
@@ -78,55 +69,6 @@ static std::string emitCFSignature(const CFuncDecl& fn) {
     }
     return out += ")";
 }
-
-static void emitPrintStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
-    out << indent(depth) << "std::cout";
-    CodeGenVisitor v;
-    if (value) {
-        if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value)) {
-            out << " << " << emitConcatPieces(c);
-        }
-        else {
-            out << " << " << v.emitExpr(value);
-        }
-    }
-    if (newline) out << " << \"\\n\"";
-    out << ";\n";
-}
-static void emitPrintMacStmt(const ExprPtr& value, bool newline, int depth, std::ofstream& out) {
-    out << indent(depth) << (newline ? "println_c(" : "print_c(");
-    CodeGenVisitor v;
-    if (value) {
-        if (auto c = std::dynamic_pointer_cast<ConcatExpr>(value); c && !c->pieces.empty()) {
-            out << v.emitExpr(c->pieces[0]);
-            for (size_t i = 1; i < c->pieces.size(); i++) {
-                out << ", " << v.emitExpr(c->pieces[i]);
-            }
-        }
-        else {
-            out << v.emitExpr(value);
-        }
-    }
-    out << ");\n";
-}
-
-static void emitContinueStmt(int depth, std::ofstream& out) {
-    out << indent(depth) << "continue;\n";
-}
-
-static void emitBreakStmt(int depth, std::ofstream& out) {
-    out << indent(depth) << "break;\n";
-}
-
-static void emitClearStmt(int depth, std::ofstream& out) {
-#ifdef _WIN32
-    out << indent(depth) << "system(\"cls\");\n";
-#else
-    out << indent(depth) << "std::cout << \"\\033[2J\\033[H\";\n";
-    out << indent(depth) << "std::cout.flush();\n";
-#endif
-}
-
 
 static std::string emitSignature(const FunctionDecl& fn) {
     std::string out = cppType(fn.returnType) + " " + fn.name + "(";

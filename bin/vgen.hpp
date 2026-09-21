@@ -372,7 +372,7 @@ public:
         out += emitBlock(t.tryBody, depth + 1);
         out += indent(depth) + "}\n";
         if (!t.hasExcept) {
-            out += indent(depth) + "catch (...) {}\n";
+            return out + indent(depth) + "catch (...) {}\n";
         } else if (!t.nec) {
             out += indent(depth) + "catch (const std::exception& e) {\n";
             out += indent(depth + 1) + "cobalt__try_status__ = 1;\n";
@@ -381,15 +381,14 @@ public:
             out += indent(depth) + "}\n";
             out += indent(depth) + "if (" + emitExpr(t.exceptCond) + ") {\n";
             out += emitBlock(t.exceptBody, depth + 1);
-            out += indent(depth) + "}\n";
+            return out + indent(depth) + "}\n";
         } else {
             out += indent(depth) + "catch (const std::exception& e) {\n";
             out += emitBlock(t.exceptBody, depth + 1);
             out += indent(depth) + "} catch (...) {\n";
             out += emitBlock(t.exceptBody, depth + 1);
-            out += indent(depth) + "}\n";
+            return out + indent(depth) + "}\n";
         }
-        return out;
     }
 
     // --- Function declarations (mirror the old free emitters) ---
@@ -403,8 +402,7 @@ public:
         sig += ")";
         std::string out = indent(depth) + sig + " {\n";
         out += emitBlock(f.body, depth + 1);
-        out += indent(depth) + "}\n";
-        return out;
+        return out + indent(depth) + "}\n";
     }
 
     std::string visit(CFuncDecl& f) override {

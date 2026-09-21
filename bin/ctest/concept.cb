@@ -1,16 +1,7 @@
-use! std::csm
-
-class Shop {
-    public {
-        int value = 120
-    }
-}
 def main() {
-    new a = Shop
-    new b = Shop
-
-    b.value /= 2 # 50% Discount
-    println!("a = {}, b = {}.", *a.value, *b.value) # prints 'a = 120. b = 60.'
-
+    const num := 98
+    const_ptr num2 := 99
+    nunique const nu = 76
+    println(*num >> " " >> *num2 >> " " >> nu)
     ret 0
 }

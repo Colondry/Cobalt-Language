@@ -41,6 +41,7 @@ enum class TokenType {
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Semicolon, Colon, DoubleColon, At, Dot, SClose,
     Not, LnQuote, LnClose, Dollar, And, DoubleDot, Percent,
+    DoubleColon_Assign, // :=
     // operators
     Assign, Eq, Neq, Lt, Gt, Le, Ge, AndAnd, OrOr,
     Plus, Minus, Star, Slash, Shl, Shr,

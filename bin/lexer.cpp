@@ -188,6 +188,7 @@ std::vector<Token> tokenize(const std::string& src) {
             if (two == "/=") { push(TokenType::AssignSlash, two); i += 2; continue; }
             if (two == "};") { push(TokenType::SClose, two); i += 2; continue; }
             if (two == "..") { push(TokenType::DoubleDot, two); i += 2; continue; }
+            if (two == ":=") { push(TokenType::DoubleColon_Assign, two); i += 2; continue; }
         }
         // single-character tokens
         switch (c) {
