@@ -752,11 +752,11 @@ StmtPtr Parser::parseIf() {
     stmt->condition = parseExpression();
     if (check(TokenType::LBrace)) {
         stmt->body = parseBlock(""); advance();
-    } else if (check(TokenType::Do)) {
-        advance(); // 'do'
+    } else if (check(TokenType::Then)) {
+        advance(); // 'then'
         stmt->body = parseInlineBlock("");
     } else {
-        reportError("expected '{' or 'do' after if condition");
+        reportError("expected '{' or 'then' after if condition");
     }
 
     if (check(TokenType::Elif)) {
@@ -782,11 +782,11 @@ StmtPtr Parser::parseIf() {
         
         if (check(TokenType::LBrace)) {
             stmt->elifbody = parseBlock(""); advance();
-        } else if (check(TokenType::Do)) {
-            advance(); // 'do'
+        } else if (check(TokenType::Then)) {
+            advance(); // 'then'
             stmt->elifbody = parseInlineBlock("");
         } else {
-            reportError("expected '{' or 'do' after an elif condition");
+            reportError("expected '{' or 'then' after an elif condition");
         }
     }
     if (check(TokenType::Else)) {
@@ -810,11 +810,11 @@ StmtPtr Parser::parseIf() {
 
         if (check(TokenType::LBrace)) {
             stmt->elsebody = parseBlock(""); advance();
-        } else if (check(TokenType::Do)) {
-            advance(); // 'do'
+        } else if (check(TokenType::Then)) {
+            advance(); // 'then'
             stmt->elsebody = parseInlineBlock("");
         } else {
-            reportError("expected '{' or 'do' after an else condition");
+            reportError("expected '{' or 'then' after an else condition");
         }
     }
     return stmt;
@@ -824,7 +824,14 @@ StmtPtr Parser::parseWhile() {
     advance(); // 'while'
     auto stmt = std::make_shared<WhileStmt>();
     stmt->condition = parseExpression();
-    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    if (check(TokenType::LBrace)) {
+        stmt->body = parseBlock(""); advance();
+    } else if (check(TokenType::Do)) {
+        advance(); // 'do'
+        stmt->body = parseInlineBlock("");
+    } else {
+        reportError("expected '{' or 'do' after while condition");
+    }
     return stmt;
 }
 
@@ -832,14 +839,21 @@ StmtPtr Parser::parseRepeat() {
     advance(); // repeat
     auto value = std::make_shared<RepeatCode>();
     value->value = parseExpression();
-    value->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    if (check(TokenType::LBrace)) {
+        value->body = parseBlock(""); advance();
+    } else if (check(TokenType::Do)) {
+        advance(); // 'do'
+        value->body = parseInlineBlock("");
+    } else {
+        reportError("expected '{' or 'do' after repeat expression");
+    }
     return value;
 }
 
 StmtPtr Parser::parseForever() {
     advance(); // forever
     auto stmt = std::make_shared<ForeverCode>();
-    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    stmt->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return stmt;
 }
 
@@ -852,7 +866,14 @@ StmtPtr Parser::parseForRange() {
     stmt->varName = nameTok.text;
     stmt->condition = parseExpression();
     
-    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    if (check(TokenType::LBrace)) {
+        stmt->body = parseBlock(""); advance();
+    } else if (check(TokenType::Do)) {
+        advance(); // 'do'
+        stmt->body = parseInlineBlock("");
+    } else {
+        reportError("expected '{' or 'do' after for range");
+    }
     return stmt;
 }
 

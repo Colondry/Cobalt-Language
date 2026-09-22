@@ -24,6 +24,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"unlikely", TokenType::ifu}, {"likely", TokenType::ifl},
     {"try", TokenType::Try}, {"except", TokenType::Except},
     {"do", TokenType::Do}, {"to", TokenType::To},
+    {"then", TokenType::Then},
 
     // Operators
     {"and", TokenType::AndAnd},

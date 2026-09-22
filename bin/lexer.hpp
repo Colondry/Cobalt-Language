@@ -29,7 +29,7 @@ enum class TokenType {
     Continue, Break,
     Clear, CType,
     Try, Except,
-    Do, To,
+    Do, To, Then,
     // built-in types
     TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte,
     TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,
