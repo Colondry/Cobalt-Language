@@ -868,11 +868,11 @@ StmtPtr Parser::parseForRange() {
     
     if (check(TokenType::LBrace)) {
         stmt->body = parseBlock(""); advance();
-    } else if (check(TokenType::Do)) {
-        advance(); // 'do'
+    } else if (check(TokenType::Colon)) {
+        advance(); // ':'
         stmt->body = parseInlineBlock("");
     } else {
-        reportError("expected '{' or 'do' after for range");
+        reportError("expected '{' or ':' after for range");
     }
     return stmt;
 }
@@ -1001,7 +1001,14 @@ StmtPtr Parser::parseDo() {
     expect(TokenType::To, "to");
 
     stmt->end = parseExpression();
-    stmt->body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock("");
+    if (check(TokenType::LBrace)) {
+        stmt->body = parseBlock(""); advance();
+    } else if (check(TokenType::Colon)) {
+        advance(); // ':'
+        stmt->body = parseInlineBlock("");
+    } else {
+        reportError("expected '{' or ':' after do statement");
+    }
     return stmt;
 }
 
@@ -1343,7 +1350,7 @@ void Parser::parseImport(Program& prog) {
 }
 
 FunctionDecl Parser::parseFunction() {
-    advance(); // 'fn'
+    advance(); // 'def'
     Token nameTok = expect(TokenType::Identifier, "function name");
     expect(TokenType::LParen, "(");
 
@@ -1351,12 +1358,105 @@ FunctionDecl Parser::parseFunction() {
     fn.name = nameTok.text;
     pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
     pushConst();
+    int c = 0;
     if (!check(TokenType::RParen)) {
         do {
             Param p;
-            p.type = expectType();
-            p.name = expect(TokenType::Identifier, "parameter name").text;
-            declareVar(p.name);
+            while (check(TokenType::DotNPointer) || check(TokenType::Constant) || check(TokenType::ConstantPtr)) {
+                if (check(TokenType::DotNPointer)) {
+                    p.isNotPointer = true;
+                    c = 5;
+                    advance();
+                }
+                if (check(TokenType::Constant)) {
+                    p.isConst = true;
+                    advance();
+                }
+                if (check(TokenType::ConstantPtr)) {
+                    p.isConstPtr = true;
+                    advance();
+                }
+                if (p.isNotPointer && p.isConstPtr) {
+                    reportError("parameter cannot be both 'nunique' and 'const_ptr'.");
+                }
+            }
+            if (check(TokenType::TypeFrac) || check(TokenType::TypeVoid)) {
+                reportError("parameter type cannot be a void.");
+                advance();
+            }
+            else if (check(TokenType::TypeFrac)) {
+                advance(); // 'frac'
+                p.type = "Fraction";
+                expect(TokenType::Lt, "<");
+                p.elemType = expectType();
+                if (check(TokenType::Comma)) {
+                    advance();
+                    p.secElemType = expectType();
+                }
+                else p.secElemType = p.elemType;
+                expect(TokenType::Gt, ">");
+                p.name = expect(TokenType::Identifier, "parameter name").text;
+
+                if (check(TokenType::Assign)) {
+                    advance(); // '='
+                    p.isUnsigned = false;
+                    expect(TokenType::LBracket, "[");
+                    auto lit = std::make_shared<FracLit>();
+                    if (!check(TokenType::RBracket)) {
+                        lit->items.push_back(parseExpression());
+                        lit->index++;
+                        while (match(TokenType::Comma)) {
+                            lit->items.push_back(parseExpression());
+                            lit->index++;
+                            if (lit->items.size() > 2) {
+                                reportError("Fraction literal can only have two elements: numerator and denominator.");
+                            }
+                        }
+                    }
+                    expect(TokenType::RBracket, "]");
+                    p.init = lit;
+                }
+            }
+            else if (check(TokenType::List) || check(TokenType::TypeVector)) {
+                advance(); // 'List' or 'Vector'
+                p.type = "List";
+                expect(TokenType::Lt, "<");
+                p.elemType = expectType();
+                expect(TokenType::Gt, ">");
+                p.name = expect(TokenType::Identifier, "parameter name").text;
+
+                if (check(TokenType::Assign)) {
+                    advance(); // '='
+                    p.isUnsigned = false;
+                    expect(TokenType::LBracket, "[");
+                    auto lit = std::make_shared<ListLit>();
+                    if (!check(TokenType::RBracket)) {
+                        lit->items.push_back(parseExpression());
+                        lit->index++;
+                        while (match(TokenType::Comma)) {
+                            lit->items.push_back(parseExpression());
+                            lit->index++;
+                        }
+                    }
+                    expect(TokenType::RBracket, "]");
+                    p.init = lit;
+                }
+            }
+            else {
+                p.type = expectType();
+                p.name = expect(TokenType::Identifier, "parameter name").text;
+                if (check(TokenType::LBracket)) {
+                    Token sizeTok = expect(TokenType::Number, "array size");
+                    p.arraySize = std::atoi(sizeTok.text.c_str());
+                    expect(TokenType::RBracket, "]");
+                }
+                if (check(TokenType::Assign)) {
+                    advance(); // '='
+                    p.isUnsigned = false;
+                    p.init = parseExpression();
+                }
+            }
+            declareVar(p.name, c);
             fn.params.push_back(p);
         } while (match(TokenType::Comma));
     }

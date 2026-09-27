@@ -1,0 +1,11 @@
+@import <encryption>
+@import <network>
+
+def main() {
+    ServerTitle("New Server")
+    ServerBody(csm::toStr("<h1>Hello, World!</h1>"))
+
+    RServer(8080)
+
+    ret 0
+}

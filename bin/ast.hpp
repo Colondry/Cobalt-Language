@@ -10,7 +10,19 @@
 
 // ---------- Expressions ----------
 
-class Param { public: std::string type; std::string name; };
+class Param { 
+public: 
+    std::string type; 
+    std::string name; 
+    int arraySize = -1; 
+    ExprPtr init; 
+    bool isConst = false; 
+    bool isConstPtr = false; 
+    bool isNotPointer = false;
+    bool isUnsigned = true;
+    std::string elemType;
+    std::string secElemType;
+};
 
 class Expr {
 public:
