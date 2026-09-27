@@ -74,8 +74,10 @@ static std::string emitSignature(const FunctionDecl& fn) {
     std::string out = cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
-        if (fn.params[i].uns) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
+        if (!fn.params[i].isNotPointer) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
         else out += cppType(fn.params[i].type, "param") + " " + fn.params[i].name;
+        if (fn.params[i].arraySize >= 0) out += "[" + std::to_string(fn.params[i].arraySize) + "]";
+        if (!fn.params[i].isUnsigned) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init);
     }
     return out += ")";
 }
