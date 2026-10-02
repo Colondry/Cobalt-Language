@@ -186,9 +186,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
                 if (headerPath.empty()) file << "#include \"" << d.libName << ".hpp\"\n";
                 else file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
             }
-            else if constexpr (std::is_same_v<T, LambFuncDecl>) {
-                file << emitLambSignature(d) << " {\n" << cg.emitBlock(pruneAndReport(d.body, "lambda function '" + d.name + "'"), 1) << "};\n\n";
-            }
             else if constexpr (std::is_same_v<T, CSMDecl>) {
                 file << "#include <csystem.hpp>\n";
                 file << "#include <cotype.hpp>\n";

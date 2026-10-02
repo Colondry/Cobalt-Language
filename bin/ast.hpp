@@ -406,7 +406,6 @@ using TopLevel = std::variant<LibImport,
                               Use, AutoUse, 
                               ModuleDecl, 
                               CSMDecl,
-                              LambFuncDecl,
                               TypeDecl>;
 
 class Program {
