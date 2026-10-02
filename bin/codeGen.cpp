@@ -70,14 +70,17 @@ static std::string emitCFSignature(const CFuncDecl& fn) {
     return out += ")";
 }
 
-static std::string emitSignature(const FunctionDecl& fn) {
+static std::string emitSignature(const FunctionDecl& fn, const bool isDecl = false) {
     std::string out = cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
         if (!fn.params[i].isNotPointer) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
         else out += cppType(fn.params[i].type, "param") + " " + fn.params[i].name;
         if (fn.params[i].arraySize >= 0) out += "[" + std::to_string(fn.params[i].arraySize) + "]";
-        if (!fn.params[i].isUnsigned) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init);
+        if (isDecl) {
+            if (!fn.params[i].isNotPointer) out += " = std::make_unique<" + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, fn.params[i].isNotPointer, fn.params[i].type) + ")";
+            else if (fn.params[i].init) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init, fn.params[i].isNotPointer, fn.params[i].type);
+        }
     }
     return out += ")";
 }
@@ -116,93 +119,87 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
         }
         };
 
-    for (const LibImport& imp : program.imports) {
-        std::string headerPath;
-
-        std::string bundleDir = findLibraryDir(imp.libName, inputFileDir);
-        if (!bundleDir.empty()) {
-            fs::path hpp = fs::path(bundleDir) / (imp.libName + ".hpp");
-            fs::path h = fs::path(bundleDir) / (imp.libName + ".h");
-            std::error_code ec;
-            if (fs::exists(hpp, ec) && !ec) headerPath = hpp.string();
-            else if (fs::exists(h, ec) && !ec) headerPath = h.string();
-
-            std::error_code dirEc;
-            for (const auto& entry : fs::directory_iterator(bundleDir, dirEc)) {
-                if (dirEc) break;
-                if (!entry.is_regular_file()) continue;
-                auto ext = entry.path().extension();
-                if (ext == ".hpp" || ext == ".h") scanFileForExternGlobals(entry.path());
-            }
-        }
-        if (headerPath.empty()) headerPath = findLibraryFile(imp.libName, ".hpp", inputFileDir);
-        if (!headerPath.empty() && bundleDir.empty()) scanFileForExternGlobals(headerPath);
-
-        if (headerPath.empty()) file << "#include \"" << imp.libName << ".hpp\"\n";
-        else file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
-    }
-    if (program.use_built) { // not using '!use csm'
-        file << "#include <csystem.hpp>\n";
-        file << "#include <cotype.hpp>\n";
-        file << "#include <fsys.hpp>\n";
-        file << "#include <errors.hpp>\n";
-        file << "#include <runtime.hpp>\n";
-        file << "#include <inf.hpp>\n";
-        file << "#include <cstr.hpp>\n";
-        file << "#include <fstream>\n";
-        file << "#include <cstdio>\n";
-    }
     file << "\n";
     CodeGenVisitor cg;
-    for (const TypeDecl& td : program.typedefs) {
-        file << cg.emitStmt(std::make_shared<TypeDecl>(td), 0);
-    }
-    for (const ModuleDecl& module : program.modules) {
-        file << "namespace " << module.name << " {\n";
-        file << cg.emitBlock(module.body, 1);
-        file << "}\n";
-    }
-
-    for (const ClassDecl& cls : program.classes) {
-        file << "class " << cls.name << " {\n";
-        if (cls.pub) file << "public:\n" << cg.emitBlock(cls.publicBody, 1);
-        if (cls.pvr) file << "private:\n" << cg.emitBlock(cls.privateBody, 1);
-        file << "};\n";
-    }
-    for (const StructCode& str : program.struc) file << "struct " << str.name << " {\n" << cg.emitBlock(str.body, 1) << "};\n";
-    for (const ClassDecl& cls : program.classes) file << cls.name << " " << cls.name << ";\n";
-    for (const AutoUse& au : program.autouses) {
-        if (au.mode == 0) [[unlikely]] file << au.libName << " " << au.libName << ";\n";
-        else file << "using namespace " << au.libName << ";\n";
-    }
-    file << "\n";
-
-    for (const Use& u : program.uses) {
-        if (u.mode == 0) file << u.first << " " << u.second << ";\n";
-        else file << "namespace " << u.first << " = " << u.second << ";\n";
-    }
-    file << "\n";
-    for (const FunctionDecl& fn : program.functions) file << emitSignature(fn) << ";\n";
-    file << "\n";
-    for (auto& obj : program.usedObjects)
-    {
+    for (const auto& obj : program.usedObjects) {
         bool alreadyDeclared = false;
-        for (const ClassDecl& cls : program.classes) {
-            if (cls.name == obj) { alreadyDeclared = true; break; }
+        // Is the name of a class already declared?
+        for (const auto& decl : program.declarations) {
+            if (auto* cls = std::get_if<ClassDecl>(&decl)) {
+                if (cls->name == obj) {
+                    alreadyDeclared = true;
+                    break;
+                }
+            }
         }
+        // Is it provided by a library?
         if (libraryProvidedGlobals.count(obj)) alreadyDeclared = true;
-        if (!alreadyDeclared) {
-            file << obj << " " << obj << ";\n";
-        }
+        // Only emit if it's not already handled.
+        if (!alreadyDeclared) file << obj << " " << obj << ";\n";
     }
 
-    for (const CFuncDecl& cfnd : program.cfunctions) {
-        file << emitCFSignature(cfnd) << " {\n" << cg.emitBlock(pruneAndReport(cfnd.body, "function '" + cfnd.name + "'"), 1) << "}\n\n";
-    }
-
-    for (const FunctionDecl& fn : program.functions) {
-        file << emitSignature(fn) << " {\n";
-        if (fn.name == "main") file << indent(1) << "syncw_stdio(false);\n";
-        file << cg.emitBlock(pruneAndReport(fn.body, "function '" + fn.name + "'"), 1) << "}\n\n";
+    for (auto& decl : program.declarations) {
+        std::visit([&](auto&& d) {
+            using T = std::decay_t<decltype(d)>;
+            if constexpr (std::is_same_v<T, CFuncDecl>) {
+                file << emitCFSignature(d) << " {\n" << cg.emitBlock(pruneAndReport(d.body, "function '" + d.name + "'"), 1) << "}\n\n";
+            } else if constexpr (std::is_same_v<T, FunctionDecl>) {
+                file << emitSignature(d) << " {\n";
+                if (d.name == "main") file << indent(1) << "syncw_stdio(false);\n";
+                file << cg.emitBlock(pruneAndReport(d.body, "function '" + d.name + "'"), 1) << "}\n\n";
+            }
+            else if constexpr (std::is_same_v<T, TypeDecl>) {
+                file << cg.emitStmt(std::make_shared<TypeDecl>(d), 0);
+            }
+            else if constexpr (std::is_same_v<T, ClassDecl>) {
+                file << "class " << d.name << " {\n";
+                if (d.pub) file << "public:\n" << cg.emitBlock(d.publicBody, 1);
+                if (d.pvr) file << "private:\n" << cg.emitBlock(d.privateBody, 1);
+                file << "};\n";
+            }
+            else if constexpr (std::is_same_v<T, StructCode>) {
+                file << "struct " << d.name << " {\n" << cg.emitBlock(d.body, 1) << "};\n";
+            }
+            else if constexpr (std::is_same_v<T, ModuleDecl>) {
+                file << "namespace " << d.name << " {\n";
+                file << cg.emitBlock(d.body, 1);
+                file << "}\n";
+            }
+            else if constexpr (std::is_same_v<T, Use>) {
+                if (d.mode == 0) file << d.first << " " << d.second << ";\n";
+                else file << "namespace " << d.first << " = " << d.second << ";\n";
+            }
+            else if constexpr (std::is_same_v<T, AutoUse>) {
+                if (d.mode == 0) [[unlikely]] file << d.libName << " " << d.libName << ";\n";
+                else file << "using namespace " << d.libName << ";\n";
+            }
+            else if constexpr (std::is_same_v<T, LibImport>) {
+                std::string headerPath;
+                std::string bundleDir = findLibraryDir(d.libName, inputFileDir);
+                if (!bundleDir.empty()) {
+                    fs::path hpp = fs::path(bundleDir) / (d.libName + ".hpp");
+                    fs::path h = fs::path(bundleDir) / (d.libName + ".h");
+                    std::error_code ec;
+                    if (fs::exists(hpp, ec) && !ec) headerPath = hpp.string();
+                    else if (fs::exists(h, ec) && !ec) headerPath = h.string();
+                }
+                if (headerPath.empty()) file << "#include \"" << d.libName << ".hpp\"\n";
+                else file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
+            }
+            else if constexpr (std::is_same_v<T, LambFuncDecl>) {
+                file << emitLambSignature(d) << " {\n" << cg.emitBlock(pruneAndReport(d.body, "lambda function '" + d.name + "'"), 1) << "};\n\n";
+            }
+            else if constexpr (std::is_same_v<T, CSMDecl>) {
+                file << "#include <csystem.hpp>\n";
+                file << "#include <cotype.hpp>\n";
+                file << "#include <fsys.hpp>\n";
+                file << "#include <errors.hpp>\n";
+                file << "#include <runtime.hpp>\n";
+                file << "#include <inf.hpp>\n";
+                file << "#include <cstr.hpp>\n";
+                file << "#include <fstream>\n";
+                file << "#include <cstdio>\n";
+            }
+        }, decl);
     }
 }

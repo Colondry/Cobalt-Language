@@ -10,6 +10,13 @@
 
 // ---------- Expressions ----------
 
+class Expr {
+public:
+    virtual ~Expr() = default;
+    virtual std::string accept(ExprVisitor& v) = 0;
+};
+using ExprPtr = std::shared_ptr<Expr>;
+
 class Param { 
 public: 
     std::string type; 
@@ -23,13 +30,6 @@ public:
     std::string elemType;
     std::string secElemType;
 };
-
-class Expr {
-public:
-    virtual ~Expr() = default;
-    virtual std::string accept(ExprVisitor& v) = 0;
-};
-using ExprPtr = std::shared_ptr<Expr>;
 
 class NumberLit : public Expr { 
 public:
@@ -334,6 +334,11 @@ public:
 
 // ---------- Top level ----------
 
+class CSMDecl {
+public:
+    std::string name;
+};
+
 class FunctionDecl {
 public:
     std::string name;
@@ -392,18 +397,21 @@ class LibImport { public: std::string libName; };
 class Use { public: std::string first; std::string second; uint32_t mode; };
 class AutoUse { public: std::string libName; uint32_t mode; };
 
+#include <variant>
+using TopLevel = std::variant<LibImport, 
+                              CFuncDecl, 
+                              FunctionDecl, 
+                              ClassDecl, 
+                              StructCode, 
+                              Use, AutoUse, 
+                              ModuleDecl, 
+                              CSMDecl,
+                              LambFuncDecl,
+                              TypeDecl>;
+
 class Program {
 public:
-    std::vector<LibImport> imports;
-    std::vector<CFuncDecl> cfunctions;
-    std::vector<FunctionDecl> functions;
-    std::vector<ClassDecl> classes;
-    std::vector<StructCode> struc;
-    std::vector<Use> uses;
-    std::vector<AutoUse> autouses;
-    std::vector<ModuleDecl> modules;
-    std::vector<TypeDecl> typedefs; // top-level 'ctype' aliases (declared outside any def/class/struct/module)
-    bool use_built = true;
+    std::vector<TopLevel> declarations;
     std::unordered_set<std::string> usedObjects;
 };
 

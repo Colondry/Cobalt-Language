@@ -26,12 +26,17 @@ inline int TryStatus() { return cobalt__try_status__; }
 
 
 
+int Multiply(int a, int b = a);
 int main();
+
+int Multiply(int a, int b) {
+    return (a * b);
+}
 
 int main() {
     syncw_stdio(false);
-    std::unique_ptr<long long> num = std::make_unique<long long>(98);
-    std::cout << (*(num)) << "\n";
+    println_c("{}", Multiply(unwrap_val(6)));
+    println_c("{}", Multiply(unwrap_val(10), unwrap_val(10)));
     return 0;
 }
 

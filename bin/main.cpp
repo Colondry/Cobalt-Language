@@ -667,7 +667,7 @@ int cobaltMain(int argc, char* argv[]) {
             config = 3;
         }
         else if (cmd == "--version" || cmd == "version") {
-            std::cout << "Cobalt Stable v0.8 \"Azurit\"";
+            std::cout << "Cobalt v0.8.5 \"Azurit\"";
             return 0;
         }
         else if (cmd == "--help" || cmd == "help") {

@@ -104,14 +104,13 @@ Program Parser::parse() {
         size_t startPos = current;
 
         if (match(TokenType::At)) parseImport(program);
-        else if (check(TokenType::Fn)) program.functions.push_back(parseFunction());
-        else if (check(TokenType::Class)) program.classes.push_back(parseClasses());
-        else if (check(TokenType::RBrace) || check(TokenType::SClose)) {}
-        else if (check(TokenType::Struct)) program.struc.push_back(parseStruct());
-        else if (check(TokenType::Use)) program.uses.push_back(parseUse());
-        else if (check(TokenType::AutoUse)) program.autouses.push_back(parseAutoUse());
-        else if (check(TokenType::Module)) program.modules.push_back(parseModule());
-        else if (check(TokenType::CType)) program.typedefs.push_back(parseNCType());
+        else if (check(TokenType::Fn)) program.declarations.push_back(parseFunction());
+        else if (check(TokenType::Class)) program.declarations.push_back(parseClasses());
+        else if (check(TokenType::Struct)) program.declarations.push_back(parseStruct());
+        else if (check(TokenType::Use)) program.declarations.push_back(parseUse());
+        else if (check(TokenType::AutoUse)) program.declarations.push_back(parseAutoUse());
+        else if (check(TokenType::Module)) program.declarations.push_back(parseModule());
+        else if (check(TokenType::CType)) program.declarations.push_back(parseNCType());
         else if (check(TokenType::nUse)) program.use_built = parsenUse();
         else if (check(TokenType::Semicolon)) [[unlikely]] advance();
         else {

@@ -1,7 +1,10 @@
+def Multiply(nunique const int a, nunique int b = 555000555): int {
+    if b == 555000555 then b = a
+    ret a * b
+}
+
 def main() {
-    const num := 98
-    const_ptr num2 := 99
-    nunique const nu = 76
-    println(*num >> " " >> *num2 >> " " >> nu)
+    println!("{}", Multiply(6))
+    println!("{}", Multiply(10, 10))
     ret 0
 }

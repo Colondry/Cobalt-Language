@@ -11,9 +11,9 @@
 // ---------- Type tokens ---------
 
 bool Parser::isTypeToken(TokenType t, std::string type) {
-    for (const StructCode& sc : program.struc) {
-        if (sc.name == type) {
-            return true;
+    for (const auto& sc : program.declarations) {
+        if (auto* ptr = std::get_if<StructCode>(&sc)) {
+            if (ptr->name == type) return true;
         }
     }
     if (t == TokenType::Identifier && ctypeNames.count(type)) {
@@ -1328,7 +1328,10 @@ void Parser::parseImport(Program& prog) {
     expect(TokenType::Lt, "<");
     Token lib = expect(TokenType::Identifier, "library name");
     expect(TokenType::Gt, ">");
-    prog.imports.push_back({ lib.text });
+    if (lib.text == "std::csm") {
+        prog.declarations.emplace_back(CSMDecl{"std::csm"});
+    }
+    prog.declarations.emplace_back(LibImport{lib.text});
     std::string headerPath;
     std::string bundleDir = findLibraryDir(lib.text, inputFileDir);
     if (!bundleDir.empty()) {
