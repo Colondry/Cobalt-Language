@@ -226,7 +226,9 @@ bool invokeCppCompiler(const Program& program, const std::string& inputFile, con
             if (!bundleDir.empty()) {
                 // Bundle directory: 
                 for (const std::string& cpp : listCppFilesIn(bundleDir)) {
-                    libCpps.insert(cpp);
+                    if (imp->libName != "std::csm") {
+                        libCpps.insert(cpp);
+                    }
                 }
                 std::string flags = findLibraryLinkFlags(bundleDir);
                 if (!flags.empty() && linkFlagsSeen.insert(bundleDir).second) {
@@ -246,7 +248,7 @@ bool invokeCppCompiler(const Program& program, const std::string& inputFile, con
                     }
                     else {
                         // Found neither header nor .cpp anywhere
-                        libCpps.insert(imp->libName + ".cpp");
+                        if (imp->libName != "std::csm") libCpps.insert(imp->libName + ".cpp");
                     }
                 }
             }

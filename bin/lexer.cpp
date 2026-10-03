@@ -212,7 +212,7 @@ std::vector<Token> tokenize(const std::string& src) {
         case '/': push(TokenType::Slash, "/"); break;
         case '.': push(TokenType::Dot, "."); break;
         case '!': push(TokenType::Not, "!"); break;
-        case '^': push(TokenType::Arrow_Up, "^"); break;
+        case '^': push(TokenType::Power, "^"); break;
         case '$': push(TokenType::Dollar, "$"); break;
         case '&': push(TokenType::And, "&"); break;
         case '%': push(TokenType::Percent, "%"); break;

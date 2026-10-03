@@ -195,9 +195,18 @@ ExprPtr Parser::parseMultiplicative() {
 
 ExprPtr Parser::parsePercent() {
     return parseBinaryLevel(
-        [this] { return parseUnary(); },
+        [this] { return parsePower(); },
         [](TokenType t) -> std::string {
             if (t == TokenType::Percent) return "%";
+            return "";
+        });
+}
+
+ExprPtr Parser::parsePower() {
+    return parseBinaryLevel(
+        [this] { return parseUnary(); },
+        [](TokenType t) -> std::string {
+            if (t == TokenType::Power) return "^";
             return "";
         });
 }
@@ -490,7 +499,7 @@ std::vector<StmtPtr> Parser::parseInlineBlock(std::string retype) {
 
 StmtPtr Parser::parseVarDecl(int c) {
     auto decl = std::make_shared<VarDecl>();
-    decl->c = false; decl->cptr = false; decl->uns = true;
+    decl->c = false; decl->cptr = false; decl->uns = false;
     bool nptr = false;
     switch (c) {
         case 5: break;

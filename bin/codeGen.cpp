@@ -92,6 +92,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <iostream>\n";
     file << "#include <vector>\n";
     file << "#include <cstdint>\n";
+    file << "#include <cmath>\n";   // std::pow, emitted for the '^' operator
     file << "#include <stdfloat>\n\n";
     file << "#include <utility>\n";
     file << "#include <memory>\n";

@@ -47,6 +47,7 @@ enum class TokenType {
     Plus, Minus, Star, Slash, Shl, Shr,
     PlusPlus, MinusMinus, ifu, ifl,
     AssignAdd, AssignMinus, AssignMulti, AssignSlash,
+    Power, // ^
     // unrecognized character
     Invalid,
     EndOfFile

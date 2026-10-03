@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <cstdint>
+#include <cmath>
 #include <stdfloat>
 
 #include <utility>
@@ -15,25 +16,6 @@ inline thread_local int cobalt__try_status__ = 0;
 inline int TryStatus() { return cobalt__try_status__; }
 
 
-int Multiply(int a, int b) {
-    if ((b == 555000555))  {
-        b = a;
-    }
-    return (a * b);
-}
-
-int main() {
-    syncw_stdio(false);
-    println_c("{}", Multiply(unwrap_val(6)));
-    println_c("{}", Multiply(unwrap_val(10), unwrap_val(10)));
-    println_c("{}", (*(Mul.x)));
-    return 0;
-}
-
-class Mul {
-public:
-    int x = (0);
-};
 #include <csystem.hpp>
 #include <cotype.hpp>
 #include <fsys.hpp>
@@ -43,3 +25,13 @@ public:
 #include <cstr.hpp>
 #include <fstream>
 #include <cstdio>
+int main() {
+    syncw_stdio(false);
+    std::unique_ptr<frac<int, int>> num = std::make_unique<frac<int, int>>(4, 3);
+    std::unique_ptr<frac<int, int>> PI = std::make_unique<frac<int, int>>(22, 7);
+    std::unique_ptr<int> r = std::make_unique<int>(16);
+    std::unique_ptr<float> v = std::make_unique<float>((((*(num)) * (*(PI))) * std::pow((*(r)), 3)));
+    println_c("{}", (*(v)));
+    return 0;
+}
+

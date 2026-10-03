@@ -1,19 +1,11 @@
-def Multiply(nunique const int a, nunique int b = 555000555): int {
-    if b == 555000555 then b = a
-    ret a * b
-}
+@import <std::csm>
 
-def main() {
-    println!("{}", Multiply(6))
-    println!("{}", Multiply(10, 10))
-    println!("{}", *Mul.x)
+def main(): int {
+    frac<int> num = [4,3]
+    frac<int> PI = [22, 7]
+    int r = 16
+    float v = *num * *PI * *r ^ 3
+    println!("{}", *v)
+
     ret 0
 }
-
-class Mul {
-    public {
-        int x = 0
-    }
-}
-
-@import <std::csm>

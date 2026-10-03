@@ -111,6 +111,7 @@ private:
     ExprPtr parseEquality();       // == !=
     ExprPtr parseComparison();     // < > <= >=
     ExprPtr parseAdditive();       // + -
+    ExprPtr parsePower();          // ^
     ExprPtr parseMultiplicative(); // * /
     ExprPtr parsePercent();        // %
     ExprPtr parseUnary();          // unary -

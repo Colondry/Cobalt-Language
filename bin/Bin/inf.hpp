@@ -153,6 +153,10 @@ struct frac {
         return static_cast<float>(first) / static_cast<float>(second);
     }
 
+    explicit constexpr operator long double() const {
+        return static_cast<long double>(first) / static_cast<long double>(second);
+    }
+
     // --- Unary Operators ---
     constexpr frac operator-() const {
         return frac(-first, second);

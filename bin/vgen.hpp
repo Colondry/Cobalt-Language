@@ -14,15 +14,19 @@ public:
     bool uns = false;
     std::string type = "";
     int depth = 1;
+    std::string ftype = "";
+    std::string stype = "";
 
     // ---- Entry point (mirrors the old free function `emitExpr`) ----
-    std::string emitExpr(const ExprPtr& e, bool uns_ = false, std::string type_ = "") {
+    std::string emitExpr(const ExprPtr& e, bool uns_ = false, std::string type_ = "", std::string additional = "") {
         if (!e) return "";
         bool oldUns = uns;
         std::string oldType = type;
         uns = uns_;
         type = std::move(type_);
-        std::string result = e->accept(*this);
+        std::string result;
+        if (additional.empty()) result = e->accept(*this);
+        else result = e->accept(*this);
         uns = oldUns;
         type = std::move(oldType);
         return result;
@@ -69,9 +73,8 @@ public:
     }
 
     std::string visit(BinaryExpr& b) override {
-        if (b.op == "+") {
-            return "__cadd__(" + emitExpr(b.lhs) + ", " + emitExpr(b.rhs) + ")";
-        }
+        if (b.op == "+") return "__cadd__(" + emitExpr(b.lhs) + ", " + emitExpr(b.rhs) + ")";
+        else if (b.op == "^") return "std::pow(" + emitExpr(b.lhs) + ", " + emitExpr(b.rhs) + ")";
         return "(" + emitExpr(b.lhs) + " " + b.op + " " + emitExpr(b.rhs) + ")";
     }
 
@@ -104,13 +107,12 @@ public:
     }
 
     std::string visit(FracLit& f) override {
-        std::string inner = "{";
+        std::string inner = "";
         for (size_t i = 0; i < f.items.size(); ++i) {
             if (i) inner += ", ";
             inner += emitExpr(f.items[i]);
         }
-        inner += "}";
-        return uns ? inner : "std::make_unique<frac>(" + inner + ")";
+        return uns ? inner : "std::make_unique<frac<" + ftype + ", " + stype + ">>(" + inner + ")";
     }
 
     std::string visit(ConcatExpr& c) override {
@@ -174,6 +176,8 @@ public:
         }
         if (v.type == "Fraction") [[unlikely]] {
             std::string fracType = "frac<" + cppType(v.elemType) + ", " + cppType(v.secElemType) + ">";
+            ftype = cppType(v.elemType);
+            stype = cppType(v.secElemType);
             if (!v.uns)
                 return pad + constOnPtr + "std::unique_ptr<" + constOnPointee + fracType + "> "
                        + v.name + " = "
