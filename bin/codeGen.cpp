@@ -183,8 +183,8 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
                     if (fs::exists(hpp, ec) && !ec) headerPath = hpp.string();
                     else if (fs::exists(h, ec) && !ec) headerPath = h.string();
                 }
-                if (headerPath.empty()) file << "#include \"" << d.libName << ".hpp\"\n";
-                else file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
+                if (headerPath.empty() && d.libName != "std::csm") file << "#include \"" << d.libName << ".hpp\"\n";
+                else if (!headerPath.empty() && d.libName != "std::csm") file << "#include \"" << fs::path(headerPath).generic_string() << "\"\n";
             }
             else if constexpr (std::is_same_v<T, CSMDecl>) {
                 file << "#include <csystem.hpp>\n";

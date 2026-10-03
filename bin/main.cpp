@@ -74,14 +74,27 @@ Program parseAndGenerate(const std::string& inputFile, const std::string& output
     Program program = parser.parse(); // exits with the full error list
 
     if (isDebug) {
-        std::cout << "Parsed " << program.imports.size() << " import(s) and "
-            << program.functions.size() << " function(s):\n";
-        for (const LibImport& imp : program.imports) {
-            std::cout << "  import <" << imp.libName << ">\n";
+        int funcTotal, classTotal, importTotal = 0;
+        for (const auto& decl : program.declarations) {
+            if (auto* ptr = std::get_if<FunctionDecl>(&decl)) {
+                std::cout << "  Defined : " << ptr->name << "(" << ptr->params.size() << " param(s)): " << ptr->returnType << "\n";
+                funcTotal++;
+            }
         }
-        for (const FunctionDecl& fn : program.functions) {
-            std::cout << "  fn " << fn.name << "(" << fn.params.size() << " param(s)): " << fn.returnType << "\n";
+        for (const auto& decl : program.declarations) {
+            if (auto* cls = std::get_if<ClassDecl>(&decl)) {
+                std::cout << "  Class : " << cls->name << "\n";
+            }
         }
+        for (const auto& decl : program.declarations) {
+            if (auto* imp = std::get_if<LibImport>(&decl)) {
+                std::cout << "  Imported : " << imp->libName << "\n";
+                importTotal++;
+            }
+        }
+        std::cout << "\nTotal functions defined: " << funcTotal << "\n";
+        std::cout << "Total classes defined: " << classTotal << "\n";
+        std::cout << "Total imports: " << importTotal << "\n";
         std::cout << "\n\nOutput:\n";
     }
     std::string outFile = outputFile.empty() ? fs::path(inputFile).stem().string() : outputFile;
@@ -207,32 +220,34 @@ bool invokeCppCompiler(const Program& program, const std::string& inputFile, con
     std::set<std::string> libCpps; // dedupe: multiple imports may share a bundle dir's files
     std::set<std::string> linkFlagsSeen; // dedupe: multiple imports may share a bundle dir's link.txt
     std::string extraLinkFlags;
-    for (const LibImport& imp : program.imports) {
-        std::string bundleDir = findLibraryDir(imp.libName, inputFileDir);
-        if (!bundleDir.empty()) {
-            // Bundle directory: 
-            for (const std::string& cpp : listCppFilesIn(bundleDir)) {
-                libCpps.insert(cpp);
-            }
-            std::string flags = findLibraryLinkFlags(bundleDir);
-            if (!flags.empty() && linkFlagsSeen.insert(bundleDir).second) {
-                extraLinkFlags += " " + flags;
-            }
-        }
-        else {
-            std::string libCpp = findLibraryFile(imp.libName, ".cpp", inputFileDir);
-            if (!libCpp.empty()) {
-                libCpps.insert(libCpp);
+    for (const auto& decl : program.declarations) {
+        if (auto* imp = std::get_if<LibImport>(&decl)) {
+            std::string bundleDir = findLibraryDir(imp->libName, inputFileDir);
+            if (!bundleDir.empty()) {
+                // Bundle directory: 
+                for (const std::string& cpp : listCppFilesIn(bundleDir)) {
+                    libCpps.insert(cpp);
+                }
+                std::string flags = findLibraryLinkFlags(bundleDir);
+                if (!flags.empty() && linkFlagsSeen.insert(bundleDir).second) {
+                    extraLinkFlags += " " + flags;
+                }
             }
             else {
-                bool headerExists = !findLibraryFile(imp.libName, ".hpp", inputFileDir).empty()
-                    || !findLibraryFile(imp.libName, ".h", inputFileDir).empty();
-                if (headerExists) {
-                    // Header-only library -- nothing to compile/link separately.
+                std::string libCpp = findLibraryFile(imp->libName, ".cpp", inputFileDir);
+                if (!libCpp.empty()) {
+                    libCpps.insert(libCpp);
                 }
                 else {
-                    // Found neither header nor .cpp anywhere
-                    libCpps.insert(imp.libName + ".cpp");
+                    bool headerExists = !findLibraryFile(imp->libName, ".hpp", inputFileDir).empty()
+                        || !findLibraryFile(imp->libName, ".h", inputFileDir).empty();
+                    if (headerExists) {
+                        // Header-only library -- nothing to compile/link separately.
+                    }
+                    else {
+                        // Found neither header nor .cpp anywhere
+                        libCpps.insert(imp->libName + ".cpp");
+                    }
                 }
             }
         }

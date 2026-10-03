@@ -1327,6 +1327,10 @@ void Parser::parseImport(Program& prog) {
     expect(TokenType::Import, "'import'");
     expect(TokenType::Lt, "<");
     Token lib = expect(TokenType::Identifier, "library name");
+    if (lib.text == "std" && peek().type == TokenType::DoubleColon) {
+        advance(); // '::'
+        lib.text += "::" + expect(TokenType::Identifier, "library name").text;
+    }
     expect(TokenType::Gt, ">");
     if (lib.text == "std::csm") {
         prog.declarations.emplace_back(CSMDecl{"std::csm"});
