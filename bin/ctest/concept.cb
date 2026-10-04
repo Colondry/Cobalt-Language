@@ -1,11 +1,11 @@
 @import <std::csm>
 
 def main(): int {
-    frac<int> num = [4,3]
-    frac<int> PI = [22, 7]
-    int r = 16
-    float v = *num * *PI * *r ^ 3
-    println!("{}", *v)
+    if 10 > 9 then println!("ello")
+    elif 18 < 9 then println!("ello")
+    elif 10 == 9 then println!("ello")
+    elif 10 <= 9 then println!("ello")
+    else then println!("done!")
 
     ret 0
 }

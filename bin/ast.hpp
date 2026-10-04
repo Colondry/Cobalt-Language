@@ -272,14 +272,13 @@ public:
 class IfStmt : public Stmt {
 public:
     ExprPtr condition;
-    bool unl, lik, eiunl, eilik, eunl, elik, iselif, iselse = false;
+    bool unl, lik, eunl, elik, iselif, iselse = false;
     std::vector<StmtPtr> body;
-    ExprPtr elifCond;
-    std::vector<StmtPtr> elifbody;
+    std::vector<ElifStmt> elifs;
     std::vector<StmtPtr> elsebody;
 
     IfStmt(ExprPtr c = nullptr, bool u = false, bool l = false, std::vector<StmtPtr> b = {}, ExprPtr ec = nullptr, std::vector<StmtPtr> eb = {}, std::vector<StmtPtr> es = {}) :
-        condition(std::move(c)), unl(u), lik(l), body(std::move(b)), elifCond(std::move(ec)), elifbody(std::move(eb)), elsebody(std::move(es)) {}
+        condition(std::move(c)), unl(u), lik(l), body(std::move(b)), elifs(std::move(elifs)), elsebody(std::move(es)) {}
     std::string accept(class StmtVisitor& v) override;
 };
 

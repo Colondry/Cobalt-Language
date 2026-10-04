@@ -767,35 +767,38 @@ StmtPtr Parser::parseIf() {
     } else {
         reportError("expected '{' or 'then' after if condition");
     }
-
-    if (check(TokenType::Elif)) {
-        stmt->iselif = true;
-        advance(); // 'elif'
-        
-        if (check(TokenType::Lt)) {
-            advance();
-            if (check(TokenType::ifl)) { 
-                stmt->eilik = true;
-                advance(); 
+    while (check(TokenType::Elif)) {
+        ElifStmt elif{};
+        if (check(TokenType::Elif)) {
+            stmt->iselif = true;
+            advance(); // 'elif'
+            
+            if (check(TokenType::Lt)) {
+                advance();
+                if (check(TokenType::ifl)) { 
+                    elif.lik = true;
+                    advance(); 
+                }
+                else if(check(TokenType::ifu)) { 
+                    elif.unl = true;
+                    advance(); 
+                }
+                else reportError("expected either 'likely' or 'unlikely'");
+                if (elif.lik && elif.unl) reportError("both 'likely' and 'unlikely' in the same elif statements!");
+                expect(TokenType::Gt, ">");
             }
-            else if(check(TokenType::ifu)) { 
-                stmt->eiunl = true;
-                advance(); 
-            }
-            else reportError("expected either 'likely' or 'unlikely'");
-            if (stmt->eilik && stmt->eiunl) reportError("both 'likely' and 'unlikely' in the same elif statements!");
-            expect(TokenType::Gt, ">");
-        }
 
-        stmt->elifCond = parseExpression();
-        
-        if (check(TokenType::LBrace)) {
-            stmt->elifbody = parseBlock(""); advance();
-        } else if (check(TokenType::Then)) {
-            advance(); // 'then'
-            stmt->elifbody = parseInlineBlock("");
-        } else {
-            reportError("expected '{' or 'then' after an elif condition");
+            elif.condition = parseExpression();
+            
+            if (check(TokenType::LBrace)) {
+                elif.body = parseBlock(""); advance();
+            } else if (check(TokenType::Then)) {
+                advance(); // 'then'
+                elif.body = parseInlineBlock("");
+            } else {
+                reportError("expected '{' or 'then' after an elif condition");
+            }
+            stmt->elifs.push_back(std::move(elif));
         }
     }
     if (check(TokenType::Else)) {
@@ -1548,12 +1551,6 @@ AutoUse Parser::parseAutoUse() {
     Token libName= expect(TokenType::Identifier, "identifier");
     autouse.libName = libName.text;
     return autouse;
-}
-
-bool Parser::parsenUse() {
-    advance(); // '!use'
-    expect(TokenType::Identifier, "identifier");
-    return false;
 }
 
 ModuleDecl Parser::parseModule() {

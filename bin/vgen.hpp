@@ -301,10 +301,10 @@ public:
                         + (i.lik ? "[[likely]]" : "") + (i.unl ? "[[unlikely]]" : "") + " {\n";
         out += emitBlock(i.body, depth + 1);
         out += indent(depth) + "}\n";
-        if (i.iselif) {
-            out += indent(depth) + "else if (" + emitExpr(i.elifCond) + ") "
-                 + (i.eilik ? "[[likely]]" : "") + (i.eiunl ? "[[unlikely]]" : "") + " {\n";
-            out += emitBlock(i.elifbody, depth + 1);
+        for (const auto& elif : i.elifs) {
+            out += indent(depth) + "else if (" + emitExpr(elif.condition) + ") "
+                 + (elif.lik ? "[[likely]]" : "") + (elif.unl ? "[[unlikely]]" : "") + " {\n";
+            out += emitBlock(elif.body, depth + 1);
             out += indent(depth) + "}\n";
         }
         if (i.iselse) {

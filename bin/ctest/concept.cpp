@@ -27,11 +27,21 @@ inline int TryStatus() { return cobalt__try_status__; }
 #include <cstdio>
 int main() {
     syncw_stdio(false);
-    std::unique_ptr<frac<int, int>> num = std::make_unique<frac<int, int>>(4, 3);
-    std::unique_ptr<frac<int, int>> PI = std::make_unique<frac<int, int>>(22, 7);
-    std::unique_ptr<int> r = std::make_unique<int>(16);
-    std::unique_ptr<float> v = std::make_unique<float>((((*(num)) * (*(PI))) * std::pow((*(r)), 3)));
-    println_c("{}", (*(v)));
+    if ((10 > 9))  {
+        println_c("ello");
+    }
+    else if ((18 < 9))  {
+        println_c("ello");
+    }
+    else if ((10 == 9))  {
+        println_c("ello");
+    }
+    else if ((10 <= 9))  {
+        println_c("ello");
+    }
+    else  {
+        println_c("done!");
+    }
     return 0;
 }
 
