@@ -340,6 +340,7 @@ public:
 
 class FunctionDecl {
 public:
+    bool inl = false;
     std::string name;
     std::vector<Param> params;
     std::string returnType;

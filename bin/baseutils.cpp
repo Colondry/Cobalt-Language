@@ -1370,10 +1370,11 @@ void Parser::parseImport(Program& prog) {
 
 FunctionDecl Parser::parseFunction() {
     advance(); // 'def'
+    FunctionDecl fn;
+    if (check(TokenType::Inline)) fn.inl = true;
     Token nameTok = expect(TokenType::Identifier, "function name");
     expect(TokenType::LParen, "(");
 
-    FunctionDecl fn;
     fn.name = nameTok.text;
     pushScope(); // parameter scope -- lives for the whole function, including the body's own nested scope
     pushConst();
@@ -1492,7 +1493,16 @@ FunctionDecl Parser::parseFunction() {
             fn.returnType = "auto";
         }
     }
-    fn.body = parseBlock(fn.returnType);
+    if (check(TokenType::LBrace)) {
+        fn.body = parseCFBlock(fn.returnType);
+    }
+    else if (check(TokenType::Colon)) {
+        fn.body = parseInlineBlock(fn.returnType);
+        fn.inl = true;
+    }
+    else {
+        reportError("expected '{' or ':' after function declaration");
+    }
     popConst();
     popScope();
     return fn;
