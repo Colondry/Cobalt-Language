@@ -1371,7 +1371,10 @@ void Parser::parseImport(Program& prog) {
 FunctionDecl Parser::parseFunction() {
     advance(); // 'def'
     FunctionDecl fn;
-    if (check(TokenType::Inline)) fn.inl = true;
+    if (check(TokenType::Inline)) { 
+        fn.inl = true;
+        advance(); // 'inline'
+    }
     Token nameTok = expect(TokenType::Identifier, "function name");
     expect(TokenType::LParen, "(");
 

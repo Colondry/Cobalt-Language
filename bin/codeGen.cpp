@@ -71,7 +71,7 @@ static std::string emitCFSignature(const CFuncDecl& fn) {
 }
 
 static std::string emitSignature(const FunctionDecl& fn, const bool isDecl = false) {
-    std::string out = cppType(fn.returnType) + " " + fn.name + "(";
+    std::string out = (fn.inl ? "inline " : "") + cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
         if (!fn.params[i].isNotPointer) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;

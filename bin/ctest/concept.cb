@@ -1,5 +1,8 @@
 @import <std::csm>
 
+def inline getNum(): int { int a = 9 * 9 * 9; ret a * a * a; }
+def getNum2(): int: ret getNum() * getNum(); # counts as inline
+
 def main(): int {
     if 10 > 9 then println!("ello")
     elif 18 < 9 then println!("ello")
