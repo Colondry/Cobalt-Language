@@ -91,6 +91,13 @@ class BinaryExpr : public Expr { public: std::string op; ExprPtr lhs; ExprPtr rh
     BinaryExpr(std::string o = "", ExprPtr l = nullptr, ExprPtr r = nullptr) : op(std::move(o)), lhs(std::move(l)), rhs(std::move(r)) {}
     std::string accept(ExprVisitor& v) override;
 };
+class ConvertExpr : public Expr {
+public: 
+    std::string targetType; 
+    ExprPtr target; 
+    ConvertExpr(std::string t = "", ExprPtr e = nullptr) : targetType(std::move(t)), target(std::move(e)) {}
+    std::string accept(ExprVisitor& v) override;
+};
 
 class ConcatExpr : public Expr {
 public:

@@ -211,7 +211,7 @@ ExprPtr Parser::parsePower() {
         });
 }
 
-// Parses a unary expression (-, !, $, &, *)
+// Parses a unary expression (-, !, $, &, *, ~)
 ExprPtr Parser::parseUnary() {
     if (check(TokenType::Dollar)) { // Move operator '$'
         advance();
@@ -264,6 +264,17 @@ ExprPtr Parser::parseUnary() {
         auto u = std::make_shared<UnaryExpr>();
         u->op = "-"; u->operand = operand;
         return u;
+    }
+    if (check(TokenType::Tilde)) {
+        advance(); // ~
+        expect(TokenType::Lt, "expected '<' after '~' for type conversion");
+        std::string targetType = expectType();
+        expect(TokenType::Gt, "expected '>' after type name for type conversion");
+        expect(TokenType::LParen, "expected '(' after type conversion");
+        ExprPtr targetExpr = parseExpression();
+        expect(TokenType::RParen, "expected ')' after type conversion expression");
+        auto conv = std::make_shared<ConvertExpr>(targetType, targetExpr);
+        return conv;
     }
 
     return parsePostfix();
@@ -737,6 +748,7 @@ StmtPtr Parser::parseReturn(std::string retype) {
         reportError("Unknown return error.");
         advance();
     }
+    if (check(TokenType::Semicolon)) advance();
     return stmt;
 }
 
@@ -1500,6 +1512,7 @@ FunctionDecl Parser::parseFunction() {
         fn.body = parseCFBlock(fn.returnType);
     }
     else if (check(TokenType::Colon)) {
+        advance(); // ':'
         fn.body = parseInlineBlock(fn.returnType);
         fn.inl = true;
     }

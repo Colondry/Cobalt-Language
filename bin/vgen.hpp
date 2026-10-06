@@ -10,14 +10,13 @@
 
 class CodeGenVisitor : public ExprVisitor, public StmtVisitor {
 public:
-    // ---- Context (saved/restored around recursive emitExpr calls) ----
     bool uns = false;
     std::string type = "";
     int depth = 1;
     std::string ftype = "";
     std::string stype = "";
 
-    // ---- Entry point (mirrors the old free function `emitExpr`) ----
+    // ---- Entry point ----
     std::string emitExpr(const ExprPtr& e, bool uns_ = false, std::string type_ = "", std::string additional = "") {
         if (!e) return "";
         bool oldUns = uns;
@@ -31,8 +30,6 @@ public:
         type = std::move(oldType);
         return result;
     }
-
-    // ---- Statement entry point ----
     std::string emitStmt(const StmtPtr& s, int d) {
         if (!s) return "";
         int oldDepth = depth;
@@ -41,17 +38,13 @@ public:
         depth = oldDepth;
         return result;
     }
-
-    // ---- Helper: emit a whole block, joined with no separator ----
     std::string emitBlock(const std::vector<StmtPtr>& body, int d) {
         std::string out;
         for (const auto& s : body) out += emitStmt(s, d);
         return out;
     }
 
-    // ===========================================================
-    // Expression visitors — mirrors the old `emitExpr()` exactly.
-    // ===========================================================
+    // Expression visitors
 
     std::string visit(NumberLit& n) override { return n.value; }
     std::string visit(StringLit& s) override { return s.value; }
@@ -151,13 +144,13 @@ public:
     }
 
     std::string visit(PointerExpr& p) override {
-        // Fill in from whatever the old code did. Placeholder:
         return "(*(" + emitExpr(p.object) + "))";
     }
+    std::string visit(ConvertExpr& c) override {
+        return "csm::conv<" + cppType(c.targetType) + ">(" + emitExpr(c.target) + ")";
+    }
 
-    // ===========================================================
-    // Statement visitors — mirrors the old `emitStmt()` exactly.
-    // ===========================================================
+    // Statement visitors
 
     std::string visit(VarDecl& v) override {
         std::string constOnPointee = (!v.uns && v.cptr) ? "const " : "";
@@ -394,8 +387,6 @@ public:
             return out + indent(depth) + "}\n";
         }
     }
-
-    // --- Function declarations (mirror the old free emitters) ---
 
     std::string visit(CFDecl& f) override {
         std::string sig = cppType(f.returnType) + " " + f.name + "(";

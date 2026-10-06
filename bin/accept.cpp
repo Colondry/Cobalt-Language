@@ -22,6 +22,7 @@ std::string MethodMemberExpr::accept(ExprVisitor& v)   { return v.visit(*this); 
 std::string PointerExpr::accept(ExprVisitor& v)        { return v.visit(*this); }
 std::string MethodCallExpr::accept(ExprVisitor& v)     { return v.visit(*this); }
 std::string NamespaceCallExpr::accept(ExprVisitor& v)  { return v.visit(*this); }
+std::string ConvertExpr::accept(ExprVisitor& v)           { return v.visit(*this); }
 
 // ---------- Stmt ----------
 std::string VarDecl::accept(StmtVisitor& v)            { return v.visit(*this); }

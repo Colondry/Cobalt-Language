@@ -25,6 +25,15 @@ inline int TryStatus() { return cobalt__try_status__; }
 #include <cstr.hpp>
 #include <fstream>
 #include <cstdio>
+inline int getNum() {
+    std::unique_ptr<int> a = std::make_unique<int>(((9 * 9) * 9));
+    return ((a * a) * a);
+}
+
+inline int getNum2() {
+    return (getNum() * getNum());
+}
+
 int main() {
     syncw_stdio(false);
     if ((10 > 9))  {
@@ -41,6 +50,9 @@ int main() {
     }
     else  {
         println_c("done!");
+    }
+    if ((csm::conv<int>(x) > 8))  {
+        println_c("x is more than 8");
     }
     return 0;
 }

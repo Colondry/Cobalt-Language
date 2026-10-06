@@ -24,6 +24,7 @@ class MethodCallExpr;
 class MethodMemberExpr;
 class NamespaceCallExpr;
 class PointerExpr;
+class ConvertExpr;
 
 class AssignStmt;
 class ExprAssignStmt;
@@ -73,6 +74,7 @@ public:
     virtual std::string visit(MethodMemberExpr& m) { return ""; }
     virtual std::string visit(NamespaceCallExpr& n) { return ""; }
     virtual std::string visit(PointerExpr& p) { return ""; }
+    virtual std::string visit(ConvertExpr& c) { return ""; }
 };
 
 class StmtVisitor {
