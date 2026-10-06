@@ -55,6 +55,8 @@ static void collectUses(const ExprPtr& e, std::unordered_set<std::string>& used)
     }
     if (auto mm = std::dynamic_pointer_cast<MethodMemberExpr>(e)) { collectUses(mm->object, used); return; }
     // NumberLit / StringLit / CharLit: nothing to record.
+    if (auto p = std::dynamic_pointer_cast<PointerExpr>(e)) { collectUses(p->object, used); return; }
+    if (auto c = std::dynamic_pointer_cast<ConvertExpr>(e)) { collectUses(c->target, used); return; }
 }
 
 static void collectUsesInBlock(const std::vector<StmtPtr>& body, std::unordered_set<std::string>& used) {

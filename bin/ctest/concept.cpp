@@ -8,6 +8,7 @@
 #include <memory>
 #include <type_traits>
 #include <cnow.hpp>
+#include <cstart.hpp>
 
 inline void syncw_stdio(bool s) {
    std::ios_base::sync_with_stdio(s);
