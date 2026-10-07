@@ -2,7 +2,7 @@
 
 def inline getNum(): int { 
     int a = 9 * 9 * 9;
-    ret a * a * a;
+    ret *a * *a * *a;
 }
 def getNum2(): int: ret getNum() * getNum(); # counts as inline
 
@@ -14,7 +14,11 @@ def main(): int {
     else then println!("done!")
 
     int x = 9.55
-    if ~<int>(x) > 8 then println!("x is more than 8")
+    if ~<int>(*x) > 8 then println!("x is more than 8")
+    println!("{}", ~<int>(*x))
+
+    frac<int> fi = {9, 8}
+    println!("{}", *fi)
 
     ret 0
 }

@@ -39,6 +39,8 @@ bool Parser::looksLikeVarDecl() {
 }
 
 std::string Parser::typeName(std::string type, TokenType t) {
+    std::string elemType;
+    std::string secElemType;
     switch (t) {
     case TokenType::TypeInt: return "int";
     case TokenType::TypeStr: return "c_string";
@@ -61,6 +63,19 @@ std::string Parser::typeName(std::string type, TokenType t) {
     case TokenType::TypeFloat64: return "std::float64_t";
     case TokenType::TypeFloat128: return "std::float128_t";
     case TokenType::TypeFILE: return "std::FILE*";
+    case TokenType::TypeFrac: 
+        advance();
+        expect(TokenType::Lt, "<");
+        elemType = expectType();
+        if (check(TokenType::Comma)) {
+            advance();
+            secElemType = expectType();
+            expect(TokenType::Gt, ">");
+            return "frac<" + elemType + ", " + secElemType + ">";
+        } else {
+            secElemType = elemType;
+            return "frac<" + elemType + ", " + secElemType + ">";
+        }
     default:
         return type;
     }
@@ -74,6 +89,19 @@ std::string Parser::expectType() {
         advance();
         return "auto";
     }
+    if (check(TokenType::Lt)) {
+        advance();
+        std::vector<std::string> genericTypes;
+        do {
+            genericTypes.push_back(expectType());
+        } while (match(TokenType::Comma));
+        expect(TokenType::Gt, ">");
+        std::string result = typeName(ty, advance().type);
+        for (const auto& genericType : genericTypes) {
+            result += ", " + genericType;
+        }
+        return result;
+    }
     return typeName(ty, advance().type);
 }
 
@@ -86,10 +114,6 @@ ExprPtr Parser::parseBinaryLevel(const std::function<ExprPtr()>& parseNextLevel,
     while (true) {
         std::string op = operatorFor(peek().type);
         if (op.empty()) break;
-        // An operator that starts a new line is almost always the start of the NEXT
-        // statement (e.g. a bare '*ptr = val' after a decl on the previous line), not a
-        // continuation of this expression -- the lexer doesn't emit statement-boundary
-        // tokens, so this is the only signal we have.
         if (current > 0 && peek().line != tokens[current - 1].line) break;
         advance();
         auto binary = std::make_shared<BinaryExpr>();
@@ -430,14 +454,14 @@ ExprPtr Parser::parsePrimary() {
         lit->value = "'" + advance().text + "'";
         return lit;
     }
-    if (check(TokenType::LBracket)) {
+    if (check(TokenType::LBrace)) {
         advance();
         auto lit = std::make_shared<ListLit>();
-        if (!check(TokenType::RBracket)) {
+        if (!check(TokenType::RBrace)) {
             lit->items.push_back(parseExpression());
             while (match(TokenType::Comma)) lit->items.push_back(parseExpression());
         }
-        expect(TokenType::RBracket, "]");
+        expect(TokenType::RBrace, "}");
         return lit;
     }
     if (check(TokenType::LParen)) {
@@ -487,6 +511,7 @@ std::vector<StmtPtr> Parser::parseBlock(std::string retype) {
         if (s) stmts.push_back(s);
     }
     expect(TokenType::RBrace, "}");
+    if (check(TokenType::Semicolon)) advance(); 
     popConst();
     popScope();
     return stmts;
@@ -500,8 +525,6 @@ std::vector<StmtPtr> Parser::parseInlineBlock(std::string retype) {
     // parses statement
     StmtPtr s = parseStatement(retype);
     if (s) stmts.push_back(s);
-
-    // consume trailing semicolon if the statement didn't consume it
     if (check(TokenType::Semicolon)) advance();
     popConst();
     popScope();
@@ -538,9 +561,9 @@ StmtPtr Parser::parseVarDecl(int c) {
         declareVar(decl->name, c);
 
         if (match(TokenType::Assign)) {
-            expect(TokenType::LBracket, "[");
+            expect(TokenType::LBrace, "{");
             auto lit = std::make_shared<ListLit>();
-            if (!check(TokenType::RBracket)) {
+            if (!check(TokenType::RBrace)) {
                 lit->items.push_back(parseExpression()); lit->index++;
                 while (match(TokenType::Comma))
                 {
@@ -548,7 +571,7 @@ StmtPtr Parser::parseVarDecl(int c) {
                     lit->index++;
                 }
             }
-            expect(TokenType::RBracket, "]");
+            expect(TokenType::RBrace, "}");
             decl->init = lit;
         }
         else {
@@ -574,9 +597,9 @@ StmtPtr Parser::parseVarDecl(int c) {
         declareVar(decl->name, c);
 
         if (match(TokenType::Assign)) {
-            expect(TokenType::LBracket, "[");
+            expect(TokenType::LBrace, "{");
             auto lit = std::make_shared<FracLit>();
-            if (!check(TokenType::RBracket)) {
+            if (!check(TokenType::RBrace)) {
                 lit->items.push_back(parseExpression()); lit->index++;
                 if (lit->index > 2) {
                     reportError("fraction index cannot be more than 2.");
@@ -593,7 +616,7 @@ StmtPtr Parser::parseVarDecl(int c) {
                     reportError("fraction index cannot be more than 2.");
                 }
             }
-            expect(TokenType::RBracket, "]");
+            expect(TokenType::RBrace, "}");
             decl->init = lit;
         }
         else {
