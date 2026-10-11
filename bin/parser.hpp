@@ -23,6 +23,8 @@ public:
 
     std::vector<std::string> errors;
 
+    void reportError(const std::string& message);
+
 
 private:
 
@@ -92,7 +94,6 @@ private:
     bool check(TokenType type) const;
     bool match(TokenType type);
     Token expect(TokenType type, const std::string& what);
-    void reportError(const std::string& message);
     void recoverStatement();
 
     // ---------- Types (defined in baseutils.cpp) ----------

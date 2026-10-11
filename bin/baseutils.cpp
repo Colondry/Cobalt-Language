@@ -1,6 +1,7 @@
 #include "baseutils.hpp"
 #include "ast.hpp"
 #include "flib.hpp"
+#include "checker.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <algorithm>
@@ -350,10 +351,9 @@ ExprPtr Parser::parsePostfix() {
                 if (getVarState(name->name) == VariableState::Moved) {
                     reportError("Cannot increment moved value '" + name->name + "'");
                 }
-                advance();
                 auto inc = std::make_shared<PostIncExpr>();
-                inc->name = name->name;
-                expr = inc;
+                inc->name = parseExpression();
+                expr = inc; advance();
             }
             else {
                 reportError("'++' can only be applied to a variable name");
@@ -366,10 +366,9 @@ ExprPtr Parser::parsePostfix() {
                 if (getVarState(name->name) == VariableState::Moved) {
                     reportError("Cannot decrement moved value '" + name->name + "'");
                 }
-                advance();
                 auto dec = std::make_shared<PostMinExpr>();
-                dec->name = name->name;
-                expr = dec;
+                dec->name = parseExpression();
+                expr = dec; advance();
             }
             else {
                 reportError("'--' can only be applied to a variable name");
@@ -559,6 +558,8 @@ StmtPtr Parser::parseVarDecl(int c) {
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
         declareVar(decl->name, c);
+        VarType vtype = decl->uns ? VarType::NonUnique : VarType::Unique;
+        Checker{}.addVar(nameTok.text, vtype);
 
         if (match(TokenType::Assign)) {
             expect(TokenType::LBrace, "{");
@@ -595,6 +596,8 @@ StmtPtr Parser::parseVarDecl(int c) {
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
         declareVar(decl->name, c);
+        VarType vtype = decl->uns ? VarType::NonUnique : VarType::Unique;
+        Checker{}.addVar(decl->name, vtype);
 
         if (match(TokenType::Assign)) {
             expect(TokenType::LBrace, "{");
@@ -631,6 +634,8 @@ StmtPtr Parser::parseVarDecl(int c) {
     Token nameTok = expect(TokenType::Identifier, "variable name");
     decl->name = nameTok.text;
     declareVar(decl->name, c);
+    VarType vtype = decl->uns ? VarType::NonUnique : VarType::Unique;
+    Checker{}.addVar(nameTok.text, vtype);
 
     if (match(TokenType::LBracket)) {
         Token sizeTok = expect(TokenType::Number, "array size");
@@ -696,6 +701,8 @@ StmtPtr Parser::parseAssignOrExprStatement() {
             stmt->type = "auto";
         }
         setVarState(name, VariableState::Active);
+        VarType vtype = stmt->uns ? VarType::NonUnique : VarType::Unique;
+        Checker{}.addVar(name, vtype);
         return stmt;
     }
     else if (check(TokenType::Identifier) && current + 1 < tokens.size() &&

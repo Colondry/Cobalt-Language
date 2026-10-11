@@ -57,8 +57,8 @@ int main() {
         println_c("x is more than 8");
     }
     println_c("{}", csm::conv<int>((*(x))));
-    std::unique_ptr<frac<int, int>> fi = std::make_unique<frac<int, int>>(9, 8);
-    println_c("{}", (*(fi)));
+    frac<int, int> fi = 9, 8;
+    println_c("{}", fi);
     return 0;
 }
 

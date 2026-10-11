@@ -36,8 +36,8 @@ static void collectUses(const ExprPtr& e, std::unordered_set<std::string>& used)
     if (auto u = std::dynamic_pointer_cast<UnaryExpr>(e)) { collectUses(u->operand, used); return; }
     if (auto b = std::dynamic_pointer_cast<BinaryExpr>(e)) { collectUses(b->lhs, used); collectUses(b->rhs, used); return; }
     if (auto idx = std::dynamic_pointer_cast<IndexExpr>(e)) { collectUses(idx->base, used); collectUses(idx->index, used); return; }
-    if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) { used.insert(pi->name); return; }
-    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) { used.insert(pm->name); return; }
+    if (auto pi = std::dynamic_pointer_cast<PostIncExpr>(e)) { collectUses(pi->name, used); return; }
+    if (auto pm = std::dynamic_pointer_cast<PostMinExpr>(e)) { collectUses(pm->name, used); return; }
     if (auto lit = std::dynamic_pointer_cast<ListLit>(e)) { for (auto& it : lit->items) collectUses(it, used); return; }
     if (auto fl = std::dynamic_pointer_cast<FracLit>(e)) { for (auto& it : fl->items) collectUses(it, used); return; }
     if (auto call = std::dynamic_pointer_cast<CallExpr>(e)) { for (auto& a : call->args) collectUses(a, used); return; }

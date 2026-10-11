@@ -75,12 +75,12 @@ class CallExpr : public Expr { public: std::string callee; std::vector<ExprPtr> 
     CallExpr(std::string c = "", std::vector<ExprPtr> a = {}) : callee(std::move(c)), args(std::move(a)) {}
     std::string accept(ExprVisitor& v) override;
 };
-class PostIncExpr : public Expr { public: std::string name; 
-    PostIncExpr(std::string n = "") : name(std::move(n)) {}
+class PostIncExpr : public Expr { public: ExprPtr name; 
+    PostIncExpr(ExprPtr n = nullptr) : name(std::move(n)) {}
     std::string accept(ExprVisitor& v) override;
 };
-class PostMinExpr : public Expr { public: std::string name; 
-    PostMinExpr(std::string n = "") : name(std::move(n)) {}
+class PostMinExpr : public Expr { public: ExprPtr name; 
+    PostMinExpr(ExprPtr n = nullptr) : name(std::move(n)) {}
     std::string accept(ExprVisitor& v) override;
 };
 class UnaryExpr : public Expr { public: std::string op; ExprPtr operand; 

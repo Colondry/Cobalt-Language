@@ -4,6 +4,7 @@
 #include "ast.hpp"
 #include "visitor.hpp"
 #include "cg_helpers.hpp"
+#include "checker.hpp"
 #include <string>
 #include <vector>
 #include <memory>
@@ -51,10 +52,17 @@ public:
     std::string visit(CharLit& c)   override { return c.value; }
     std::string visit(LnQuote& l)   override { return l.value; }
 
-    std::string visit(NameExpr& n) override { return n.name; }
+    std::string visit(NameExpr& n) override {
+        if (Checker{}.varExists(n.name) && Checker{}.getPtrType(n.name) == VarType::Unique) {
+            return "(*(" + n.name + "))"; // automatic pointer dereference for unique pointers
+        } else if (!Checker{}.varExists(n.name)) {
+            return "(" + n.name + ")"; // variable not found, return as is
+        }
+        return n.name;
+    }
 
-    std::string visit(PostIncExpr& p) override { return "(" + p.name + ")++"; }
-    std::string visit(PostMinExpr& p) override { return "(" + p.name + ")--"; }
+    std::string visit(PostIncExpr& p) override { return "(" + emitExpr(p.name) + ")++"; }
+    std::string visit(PostMinExpr& p) override { return "(" + emitExpr(p.name) + ")--"; }
 
     std::string visit(UnaryExpr& u) override {
         if (u.op == "$") return "std::move(" + emitExpr(u.operand) + ")";
