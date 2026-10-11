@@ -59,12 +59,12 @@ class NameExpr : public Expr {
     std::string accept(ExprVisitor& v) override;
 };
 class ListLit : public Expr { 
-    public: std::vector<ExprPtr> items; double index; 
-    ListLit(std::vector<ExprPtr> i = {}, double ind = 0) : items(std::move(i)), index(std::move(ind)) {}
+    public: std::vector<ExprPtr> items; double index; bool uns = false;
+    ListLit(std::vector<ExprPtr> i = {}, double ind = 0) : items(std::move(i)), index(std::move(ind)), uns(false) {}
     std::string accept(ExprVisitor& v) override;
 };
-class FracLit : public Expr { public: std::vector<ExprPtr> items; double index; 
-    FracLit(std::vector<ExprPtr> i = {}, double ind = 0) : items(std::move(i)), index(std::move(ind)) {}
+class FracLit : public Expr { public: std::vector<ExprPtr> items; double index; bool uns = false;
+    FracLit(std::vector<ExprPtr> i = {}, double ind = 0) : items(std::move(i)), index(std::move(ind)), uns(false) {}
     std::string accept(ExprVisitor& v) override;
 };
 class IndexExpr : public Expr { public: ExprPtr base; ExprPtr index; 

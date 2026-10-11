@@ -113,7 +113,7 @@ public:
             if (i) inner += ", ";
             inner += emitExpr(f.items[i]);
         }
-        return uns ? inner : "std::make_unique<frac<" + ftype + ", " + stype + ">>(" + inner + ")";
+        return uns ? "{" + inner + "}" : "std::make_unique<frac<" + ftype + ", " + stype + ">>(" + inner + ")";
     }
 
     std::string visit(ConcatExpr& c) override {

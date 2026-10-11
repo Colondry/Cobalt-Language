@@ -57,7 +57,7 @@ int main() {
         println_c("x is more than 8");
     }
     println_c("{}", csm::conv<int>((*(x))));
-    frac<int, int> fi = 9, 8;
+    frac<int, int> fi = {9, 8};
     println_c("{}", fi);
     return 0;
 }

@@ -564,6 +564,7 @@ StmtPtr Parser::parseVarDecl(int c) {
         if (match(TokenType::Assign)) {
             expect(TokenType::LBrace, "{");
             auto lit = std::make_shared<ListLit>();
+            lit->uns = decl->uns;
             if (!check(TokenType::RBrace)) {
                 lit->items.push_back(parseExpression()); lit->index++;
                 while (match(TokenType::Comma))
@@ -602,6 +603,7 @@ StmtPtr Parser::parseVarDecl(int c) {
         if (match(TokenType::Assign)) {
             expect(TokenType::LBrace, "{");
             auto lit = std::make_shared<FracLit>();
+            lit->uns = decl->uns;
             if (!check(TokenType::RBrace)) {
                 lit->items.push_back(parseExpression()); lit->index++;
                 if (lit->index > 2) {
