@@ -5,7 +5,9 @@ def inline getNum(): int {
     ret a * a * a;
 }
 def getNum2(): int: ret getNum() * getNum(); # counts as inline
-
+class Math {
+    public { float PI = 3.14 }
+}
 def main(): int {
     if 10 > 9 then println!("ello")
     elif 18 < 9 then println!("ello")
@@ -19,6 +21,10 @@ def main(): int {
 
     nunique frac<int> fi = {9, 8}
     println!("{}", fi)
+
+    std::printf("Hello, World!\n")
+
+    new c = Chud
 
     ret 0
 }

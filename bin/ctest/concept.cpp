@@ -35,6 +35,10 @@ inline int getNum2() {
     return (getNum() * getNum());
 }
 
+class Math {
+public:
+    std::unique_ptr<float> PI = std::make_unique<float>(3.14);
+};
 int main() {
     syncw_stdio(false);
     if ((10 > 9))  {
@@ -59,6 +63,8 @@ int main() {
     println_c("{}", csm::conv<int>((*(x))));
     frac<int, int> fi = {9, 8};
     println_c("{}", fi);
+    std::printf("Hello, World!\n");
+    Chud c;
     return 0;
 }
 

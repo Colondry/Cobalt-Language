@@ -22,7 +22,7 @@ std::string MethodMemberExpr::accept(ExprVisitor& v)   { return v.visit(*this); 
 std::string PointerExpr::accept(ExprVisitor& v)        { return v.visit(*this); }
 std::string MethodCallExpr::accept(ExprVisitor& v)     { return v.visit(*this); }
 std::string NamespaceCallExpr::accept(ExprVisitor& v)  { return v.visit(*this); }
-std::string ConvertExpr::accept(ExprVisitor& v)           { return v.visit(*this); }
+std::string ConvertExpr::accept(ExprVisitor& v)        { return v.visit(*this); }
 
 // ---------- Stmt ----------
 std::string VarDecl::accept(StmtVisitor& v)            { return v.visit(*this); }
@@ -50,3 +50,4 @@ std::string ForRangeStmt::accept(StmtVisitor& v)       { return v.visit(*this); 
 std::string TryExcept::accept(StmtVisitor& v)          { return v.visit(*this); }
 std::string CFuncDecl::accept(StmtVisitor& v)          { return v.visit(*this); }
 std::string LambFuncDecl::accept(StmtVisitor& v)       { return v.visit(*this); }
+std::string ConstructorStmt::accept(StmtVisitor& v)    { return v.visit(*this); }

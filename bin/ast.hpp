@@ -31,6 +31,12 @@ public:
     std::string secElemType;
 };
 
+class inil {
+public:
+    std::string name;
+    ExprPtr value;
+};
+
 class NumberLit : public Expr { 
 public:
     std::string value; 
@@ -226,6 +232,16 @@ class ContinueStmt : public Stmt {
     std::string accept(class StmtVisitor& v) override;
 };
 class ClearStmt : public Stmt {
+    std::string accept(class StmtVisitor& v) override;
+};
+
+class ConstructorStmt : public Stmt {
+public:
+    std::string name;
+    std::string object;
+    std::vector<inil> initializers;
+
+    ConstructorStmt(std::string n = "", std::vector<inil> p = {}, std::vector<StmtPtr> b = {}) : name(std::move(n)), initializers(std::move(p)) {}
     std::string accept(class StmtVisitor& v) override;
 };
 

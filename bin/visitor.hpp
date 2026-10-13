@@ -51,6 +51,7 @@ class PrintMacCode;
 class RepeatCode;
 class ForeverCode;
 class TryExcept;
+class ConstructorStmt;
 
 class ExprVisitor {
 public:
@@ -107,6 +108,7 @@ public:
     virtual std::string visit(RepeatCode& r) { return ""; }
     virtual std::string visit(ForeverCode& f) { return ""; }
     virtual std::string visit(TryExcept& t) { return ""; }
+    virtual std::string visit(ConstructorStmt& c) { return ""; }
 };
 
 

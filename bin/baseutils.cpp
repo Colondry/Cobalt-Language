@@ -384,10 +384,6 @@ ExprPtr Parser::parsePostfix() {
                 call->object = expr; // the object on which the method is called
                 call->method = member.text; // the method name
 
-                if (auto name = std::dynamic_pointer_cast<NameExpr>(expr)) {
-                    program.usedObjects.insert(name->name);
-                }
-
                 if (!check(TokenType::RParen)) {
                     do {
                         call->args.push_back(parseExpression());
@@ -1050,6 +1046,16 @@ StmtPtr Parser::parseClear() {
     return std::make_shared<ClearStmt>();
 }
 
+StmtPtr Parser::parseConstruct() {
+    advance(); // 'new'
+    auto stmt = std::make_shared<ConstructorStmt>();
+    stmt->name = expect(TokenType::Identifier, "constructor name").text;
+    expect(TokenType::Assign, "=");
+    stmt->object = expect(TokenType::Identifier, "object name").text;
+    Checker{}.addConstruct(stmt->name);
+    return stmt;
+}
+
 StmtPtr Parser::parseDo() {
     advance(); // do
     auto stmt = std::make_shared<DoStmt>();
@@ -1244,6 +1250,7 @@ StmtPtr Parser::parseStatement(std::string retype) {
     if (check(TokenType::CType)) return parseCType();
     if (check(TokenType::Try)) return parseTryExcept();
     if (check(TokenType::Do)) return parseDo();
+    if (check(TokenType::New)) return parseConstruct();
     
 
     reportError("unexpected token '" + peek().text + "'");
@@ -1266,6 +1273,7 @@ StmtPtr Parser::parseSStr() {
         check(TokenType::Clear) || check(TokenType::Continue) ||
         check(TokenType::Ret) ||
         check(TokenType::Repeat) ||
+        check(TokenType::New) ||
         check(TokenType::Forever)) reportError("logic is not allowed in struct");
 
     reportError("unexpected token '" + peek().text + "'");
@@ -1288,6 +1296,7 @@ StmtPtr Parser::parseSClass() {
         check(TokenType::Clear) || check(TokenType::Continue) ||
         check(TokenType::Ret) ||
         check(TokenType::Repeat) ||
+        check(TokenType::New) ||
         check(TokenType::Forever)) reportError("logic is not allowed in class");
     if (check(TokenType::Identifier)) return parseAssignOrExprStatement();
 
@@ -1562,6 +1571,7 @@ ClassDecl Parser::parseClasses() {
 
     ClassDecl cls;
     cls.name = nameCls.text;
+    Checker{}.addClass(cls.name);
     parseCBlock(cls);
 
     return cls;
@@ -1574,6 +1584,7 @@ StructCode Parser::parseStruct() {
     StructCode str;
     str.name = nameStr.text;
     parseSBlock(str);
+    Checker{}.addStruct(str.name);
 
     return str;
 }

@@ -139,6 +139,7 @@ private:
     StmtPtr parseForever();
     StmtPtr parseForRange();
     StmtPtr parseStatement(std::string retype);
+    StmtPtr parseConstruct();
     StmtPtr parseSClass();
     StmtPtr parseSStr();
     StmtPtr parsePrintCode();

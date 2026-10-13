@@ -56,7 +56,7 @@ public:
         if (Checker{}.varExists(n.name) && Checker{}.getPtrType(n.name) == VarType::Unique) {
             return "(*(" + n.name + "))"; // automatic pointer dereference for unique pointers
         } else if (!Checker{}.varExists(n.name)) {
-            return "(" + n.name + ")"; // variable not found, return as is
+            return n.name; // variable not found, return as is
         }
         return n.name;
     }
@@ -432,6 +432,9 @@ public:
         out += emitBlock(f.body, depth + 1);
         out += indent(depth) + "};\n";
         return out;
+    }
+    std::string visit(ConstructorStmt& c) override {
+        return indent(depth) + c.object + " " + c.name + ";\n";
     }
 };
 

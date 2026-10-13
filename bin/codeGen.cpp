@@ -123,22 +123,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
 
     file << "\n";
     CodeGenVisitor cg;
-    for (const auto& obj : program.usedObjects) {
-        bool alreadyDeclared = false;
-        // Is the name of a class already declared?
-        for (const auto& decl : program.declarations) {
-            if (auto* cls = std::get_if<ClassDecl>(&decl)) {
-                if (cls->name == obj) {
-                    alreadyDeclared = true;
-                    break;
-                }
-            }
-        }
-        // Is it provided by a library?
-        if (libraryProvidedGlobals.count(obj)) alreadyDeclared = true;
-        // Only emit if it's not already handled.
-        if (!alreadyDeclared) file << obj << " " << obj << ";\n";
-    }
 
     for (auto& decl : program.declarations) {
         std::visit([&](auto&& d) {
