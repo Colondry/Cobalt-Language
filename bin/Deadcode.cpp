@@ -87,6 +87,7 @@ static void collectUsesInBlock(const std::vector<StmtPtr>& body, std::unordered_
                                                                            collectUsesInBlock(te->exceptBody, used);
                                                                            collectUses(te->exceptCond, used);
                                                                          }
+        else if (auto ci = std::dynamic_pointer_cast<CInit>(s))          collectUsesInBlock(ci->body, used);
 
         // CFDecl / LambFuncDecl (nested fn decls) intentionally left alone
     }
@@ -104,6 +105,7 @@ static void pruneNestedBodies(const StmtPtr& s, std::vector<std::string>& warnin
         te->tryBody = pruneUnusedVars(te->tryBody, warnings); 
         te->exceptBody = pruneUnusedVars(te->exceptBody, warnings);
     }
+    else if (auto ci = std::dynamic_pointer_cast<CInit>(s)) ci->body = pruneUnusedVars(ci->body, warnings);
 }
 
 std::vector<StmtPtr> pruneUnusedVars(const std::vector<StmtPtr>& body, std::vector<std::string>& warnings) {

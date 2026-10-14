@@ -140,7 +140,8 @@ private:
     StmtPtr parseForRange();
     StmtPtr parseStatement(std::string retype);
     StmtPtr parseConstruct();
-    StmtPtr parseSClass();
+    StmtPtr parseInit(std::string name);
+    StmtPtr parseSClass(std::string name);
     StmtPtr parseSStr();
     StmtPtr parsePrintCode();
     StmtPtr parseReadCode();

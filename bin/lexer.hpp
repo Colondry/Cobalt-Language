@@ -31,6 +31,7 @@ enum class TokenType {
     Try, Except,
     Do, To, Then,
     Inline, New,
+    Unique, Init, Default,
     // built-in types
     TypeInt, TypeString, TypeFloat, TypeDouble, TypeByte,
     TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,

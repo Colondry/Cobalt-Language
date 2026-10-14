@@ -26,45 +26,28 @@ inline int TryStatus() { return cobalt__try_status__; }
 #include <cstr.hpp>
 #include <fstream>
 #include <cstdio>
-inline int getNum() {
-    std::unique_ptr<int> a = std::make_unique<int>(((9 * 9) * 9));
-    return (((*(a)) * (*(a))) * (*(a)));
-}
-
-inline int getNum2() {
-    return (getNum() * getNum());
-}
-
 class Math {
 public:
-    std::unique_ptr<float> PI = std::make_unique<float>(3.14);
+    std::unique_ptr<int> x = std::make_unique<int>(0);
+    std::unique_ptr<int> y = std::make_unique<int>(0);
+    Math() = default;
+    Math(int x_ = 0, int y_ = 0)
+    {
+        (*(this->x)) = x_;
+        (*(this->y)) = y_;
+    }
+    int add() {
+        return __cadd__((*(x)), (*(y)));
+    }
 };
 int main() {
     syncw_stdio(false);
-    if ((10 > 9))  {
-        println_c("ello");
-    }
-    else if ((18 < 9))  {
-        println_c("ello");
-    }
-    else if ((10 == 9))  {
-        println_c("ello");
-    }
-    else if ((10 <= 9))  {
-        println_c("ello");
-    }
-    else  {
-        println_c("done!");
-    }
-    std::unique_ptr<int> x = std::make_unique<int>(9.55);
-    if ((csm::conv<int>((*(x))) > 8))  {
-        println_c("x is more than 8");
-    }
-    println_c("{}", csm::conv<int>((*(x))));
-    frac<int, int> fi = {9, 8};
-    println_c("{}", fi);
-    std::printf("Hello, World!\n");
-    Chud c;
+    Math m1{};
+    Math m2{10, 8};
+    Math m3{5};
+    println_c("{}", m1.add());
+    println_c("{}", m2.add());
+    println_c("{}", m3.add());
     return 0;
 }
 

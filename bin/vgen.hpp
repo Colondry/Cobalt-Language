@@ -55,8 +55,6 @@ public:
     std::string visit(NameExpr& n) override {
         if (Checker{}.varExists(n.name) && Checker{}.getPtrType(n.name) == VarType::Unique) {
             return "(*(" + n.name + "))"; // automatic pointer dereference for unique pointers
-        } else if (!Checker{}.varExists(n.name)) {
-            return n.name; // variable not found, return as is
         }
         return n.name;
     }
@@ -126,15 +124,21 @@ public:
     }
 
     std::string visit(MemberExpr& m) override {
-        return emitExpr(m.object) + "." + m.member;
+        std::string out = emitExpr(m.object) + "." + m.member;
+        if (emitExpr(m.object) == "this") [[unlikely]] out = emitExpr(m.object) + "->" + m.member;
+        if (Checker{}.varExists(m.member) && Checker{}.getPtrType(m.member) == VarType::Unique) 
+                out = "(*(" + out + "))";
+        return out;
     }
 
     std::string visit(MethodMemberExpr& m) override {
+        if (Checker{}.varExists(m.member) && Checker{}.getPtrType(m.member) == VarType::Unique) 
+                return "(*(" + emitExpr(m.object) + "::" + m.member + "))";
         return emitExpr(m.object) + "::" + m.member;
     }
 
     std::string visit(MethodCallExpr& m) override {
-        std::string out = emitExpr(m.object) + "." + m.method + "(";
+        std::string out = emitExpr(m.object) + (emitExpr(m.object) == "this" ? "->" : ".") + m.method + "(";
         for (size_t i = 0; i < m.args.size(); ++i) {
             if (i) out += ", ";
             out += emitExpr(m.args[i]);
@@ -397,10 +401,16 @@ public:
     }
 
     std::string visit(CFDecl& f) override {
-        std::string sig = cppType(f.returnType) + " " + f.name + "(";
-        for (size_t i = 0; i < f.params.size(); ++i) {
+        std::string sig = (f.inl ? "inline " : "") + cppType(f.returnType) + " " + f.name + "(";
+        for (size_t i = 0; i < f.params.size(); i++) {
             if (i) sig += ", ";
-            sig += cppType(f.params[i].type) + " " + f.params[i].name;
+            if (f.params[i].isUnique) sig += "std::unique_ptr<" + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
+            else sig += cppType(f.params[i].type, "param") + " " + f.params[i].name;
+            if (f.params[i].arraySize >= 0) sig += "[" + std::to_string(f.params[i].arraySize) + "]";
+            if (!f.params[i].isUnsigned) {
+                if (f.params[i].isUnique) sig += " = std::make_unique<" + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
+                else if (f.params[i].init) sig += " = " + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type);
+            }
         }
         sig += ")";
         std::string out = indent(depth) + sig + " {\n";
@@ -409,10 +419,16 @@ public:
     }
 
     std::string visit(CFuncDecl& f) override {
-        std::string sig = cppType(f.returnType) + " " + f.name + "(";
-        for (size_t i = 0; i < f.params.size(); ++i) {
+        std::string sig = (f.inl ? "inline " : "") + cppType(f.returnType) + " " + f.name + "(";
+        for (size_t i = 0; i < f.params.size(); i++) {
             if (i) sig += ", ";
-            sig += cppType(f.params[i].type) + " " + f.params[i].name;
+            if (f.params[i].isUnique) sig += "std::unique_ptr<" + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
+            else sig += cppType(f.params[i].type, "param") + " " + f.params[i].name;
+            if (f.params[i].arraySize >= 0) sig += "[" + std::to_string(f.params[i].arraySize) + "]";
+            if (!f.params[i].isUnsigned) {
+                if (f.params[i].isUnique) sig += " = std::make_unique<" + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
+                else if (f.params[i].init) sig += " = " + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type);
+            }
         }
         sig += ")";
         std::string out = indent(depth) + sig + " {\n";
@@ -423,9 +439,15 @@ public:
 
     std::string visit(LambFuncDecl& f) override {
         std::string sig = "auto " + f.name + " = [](";
-        for (size_t i = 0; i < f.params.size(); ++i) {
+        for (size_t i = 0; i < f.params.size(); i++) {
             if (i) sig += ", ";
-            sig += cppType(f.params[i].type) + " " + f.params[i].name;
+            if (f.params[i].isUnique) sig += "std::unique_ptr<" + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
+            else sig += cppType(f.params[i].type, "param") + " " + f.params[i].name;
+            if (f.params[i].arraySize >= 0) sig += "[" + std::to_string(f.params[i].arraySize) + "]";
+            if (!f.params[i].isUnsigned) {
+                if (f.params[i].isUnique) sig += " = std::make_unique<" + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
+                else if (f.params[i].init) sig += " = " + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type);
+            }
         }
         sig += ") -> " + cppType(f.returnType);
         std::string out = indent(depth) + sig + " {\n";
@@ -434,7 +456,29 @@ public:
         return out;
     }
     std::string visit(ConstructorStmt& c) override {
-        return indent(depth) + c.object + " " + c.name + ";\n";
+        std::string out = indent(depth) + c.object + " " + c.name + (c.bracket ? "{" : "");
+        for (size_t i = 0; i < c.args.size(); ++i) {
+            if (i) out += ", ";
+            out += emitExpr(c.args[i]);
+        }
+        return out + (c.bracket ? "}" : "") + ";\n";
+    }
+    std::string visit(CInit& i) override {
+        if (i.isDef) return indent(depth) + i.name + "() = default;\n";
+        std::string out = indent(depth) + i.name + "(";
+        for (size_t a = 0; a < i.params.size(); a++) {
+            if (a) out += ", ";
+            if (i.params[a].isUnique) out += "std::unique_ptr<" + cppType(i.params[a].type, "param") + "> " + i.params[a].name;
+            else out += cppType(i.params[a].type, "param") + " " + i.params[a].name;
+            if (i.params[a].arraySize >= 0) out += "[" + std::to_string(i.params[a].arraySize) + "]";
+            if (!i.params[a].isUnsigned) {
+                if (i.params[a].isUnique) out += " = std::make_unique<" + cppType(i.params[a].type, "param") + ">(" + CodeGenVisitor().emitExpr(i.params[a].init, !i.params[a].isUnique, i.params[a].type) + ")";
+                else if (i.params[a].init) out += " = " + CodeGenVisitor().emitExpr(i.params[a].init, !i.params[a].isUnique, i.params[a].type);
+            }
+        }
+        out += ")\n" + indent(depth) + "{\n";
+        out += emitBlock(i.body, depth+1) + indent(depth) + "}\n";
+        return out;
     }
 };
 

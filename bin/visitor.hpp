@@ -52,6 +52,7 @@ class RepeatCode;
 class ForeverCode;
 class TryExcept;
 class ConstructorStmt;
+class CInit;
 
 class ExprVisitor {
 public:
@@ -109,6 +110,7 @@ public:
     virtual std::string visit(ForeverCode& f) { return ""; }
     virtual std::string visit(TryExcept& t) { return ""; }
     virtual std::string visit(ConstructorStmt& c) { return ""; }
+    virtual std::string visit(CInit& i) { return ""; }
 };
 
 

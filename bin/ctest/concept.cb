@@ -1,30 +1,28 @@
 @import <std::csm>
-
-def inline getNum(): int { 
-    int a = 9 * 9 * 9;
-    ret a * a * a;
-}
-def getNum2(): int: ret getNum() * getNum(); # counts as inline
 class Math {
-    public { float PI = 3.14 }
+    public {
+        int x = 0
+        int y = 0
+
+        init(int x_ = 0, int y_ = 0) {
+            this.x = x_
+            this.y = y_
+        }
+
+        def add(): int {
+            ret x + y
+        }
+    }
 }
-def main(): int {
-    if 10 > 9 then println!("ello")
-    elif 18 < 9 then println!("ello")
-    elif 10 == 9 then println!("ello")
-    elif 10 <= 9 then println!("ello")
-    else then println!("done!")
 
-    int x = 9.55
-    if ~<int>(x) > 8 then println!("x is more than 8")
-    println!("{}", ~<int>(x))
+def main() {
+    new m1 = Math{}
+    new m2 = Math{10, 8}
+    new m3 = Math{5}
 
-    nunique frac<int> fi = {9, 8}
-    println!("{}", fi)
-
-    std::printf("Hello, World!\n")
-
-    new c = Chud
+    println!("{}", m1.add())   # 0
+    println!("{}", m2.add())   # 18
+    println!("{}", m3.add())   # 5
 
     ret 0
 }

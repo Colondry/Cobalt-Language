@@ -61,11 +61,17 @@ static std::string emitLambSignature(const LambFuncDecl& fn) {
     return out += ") -> " + cppType(fn.returnType);
 }
 
-static std::string emitCFSignature(const CFuncDecl& fn) {
-    std::string out = cppType(fn.returnType) + " " + fn.name + "(";
+static std::string emitCFSignature(const CFuncDecl& fn, const bool isDecl = false) {
+    std::string out = (fn.inl ? "inline " : "") + cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
-        out += cppType(fn.params[i].type) + " " + fn.params[i].name;
+        if (fn.params[i].isUnique) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
+        else out += cppType(fn.params[i].type, "param") + " " + fn.params[i].name;
+        if (fn.params[i].arraySize >= 0) out += "[" + std::to_string(fn.params[i].arraySize) + "]";
+        if (isDecl) {
+            if (fn.params[i].isUnique) out += " = std::make_unique<" + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type) + ")";
+            else if (fn.params[i].init) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type);
+        }
     }
     return out += ")";
 }
@@ -74,12 +80,12 @@ static std::string emitSignature(const FunctionDecl& fn, const bool isDecl = fal
     std::string out = (fn.inl ? "inline " : "") + cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
-        if (!fn.params[i].isNotPointer) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
+        if (fn.params[i].isUnique) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
         else out += cppType(fn.params[i].type, "param") + " " + fn.params[i].name;
         if (fn.params[i].arraySize >= 0) out += "[" + std::to_string(fn.params[i].arraySize) + "]";
         if (isDecl) {
-            if (!fn.params[i].isNotPointer) out += " = std::make_unique<" + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, fn.params[i].isNotPointer, fn.params[i].type) + ")";
-            else if (fn.params[i].init) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init, fn.params[i].isNotPointer, fn.params[i].type);
+            if (fn.params[i].isUnique) out += " = std::make_unique<" + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type) + ")";
+            else if (fn.params[i].init) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type);
         }
     }
     return out += ")";

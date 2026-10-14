@@ -25,7 +25,7 @@ public:
     ExprPtr init; 
     bool isConst = false; 
     bool isConstPtr = false; 
-    bool isNotPointer = false;
+    bool isUnique = false;
     bool isUnsigned = true;
     std::string elemType;
     std::string secElemType;
@@ -240,8 +240,10 @@ public:
     std::string name;
     std::string object;
     std::vector<inil> initializers;
+    std::vector<ExprPtr> args;
+    bool bracket = false;
 
-    ConstructorStmt(std::string n = "", std::vector<inil> p = {}, std::vector<StmtPtr> b = {}) : name(std::move(n)), initializers(std::move(p)) {}
+    ConstructorStmt(std::string n = "", std::vector<inil> p = {}, std::vector<StmtPtr> b = {}, std::vector<ExprPtr> a = {}) : name(std::move(n)), initializers(std::move(p)), args(std::move(a)) {}
     std::string accept(class StmtVisitor& v) override;
 };
 
@@ -264,12 +266,24 @@ public:
 
 class CFDecl : public Stmt {
 public:
+    bool inl = false;
     std::string name;
     std::vector<Param> params;
     std::string returnType;
     std::vector<StmtPtr> body;
 
     CFDecl(std::string n = "", std::vector<Param> p = {}, std::string r = "", std::vector<StmtPtr> b = {}) : name(std::move(n)), params(std::move(p)), returnType(std::move(r)), body(std::move(b)) {}
+    std::string accept(class StmtVisitor& v) override;
+};
+
+class CInit : public Stmt {
+public:
+    bool isDef = false;
+    std::string name;
+    std::vector<Param> params;
+    std::vector<StmtPtr> body;
+
+    CInit(std::string n = "", std::vector<Param> p = {}, std::string r = "", std::vector<StmtPtr> b = {}) : name(std::move(n)), params(std::move(p)), body(std::move(b)) {}
     std::string accept(class StmtVisitor& v) override;
 };
 
@@ -372,6 +386,7 @@ public:
 
 class CFuncDecl : public Stmt {
 public:
+    bool inl = false;
     std::string name;
     std::vector<Param> params;
     std::string returnType;
