@@ -1228,7 +1228,7 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
         fnd->returnType = expectType();
     }
     else [[unlikely]] {
-        fnd->returnType = (fnd->name == "main" ? "int" : "auto");
+        fnd->returnType = "auto";
     }
     fnd->body = parseCFBlock(fnd->returnType);
     popConst();
@@ -1246,7 +1246,7 @@ StmtPtr Parser::parseInit(std::string name) {
     if (!check(TokenType::RParen)) {
         do {
             Param p;
-            while (check(TokenType::DotNPointer) || check(TokenType::Constant) || check(TokenType::ConstantPtr)) {
+            while (check(TokenType::Unique) || check(TokenType::Constant) || check(TokenType::ConstantPtr)) {
                 if (check(TokenType::Unique)) {
                     p.isUnique = true;
                     advance();
@@ -1577,7 +1577,7 @@ FunctionDecl Parser::parseFunction() {
     if (!check(TokenType::RParen)) {
         do {
             Param p;
-            while (check(TokenType::DotNPointer) || check(TokenType::Constant) || check(TokenType::ConstantPtr)) {
+            while (check(TokenType::Unique) || check(TokenType::Constant) || check(TokenType::ConstantPtr)) {
                 if (check(TokenType::Unique)) {
                     p.isUnique = true;
                     c = 5;
