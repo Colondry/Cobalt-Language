@@ -79,7 +79,7 @@ static std::string emitSignature(const FunctionDecl& fn, const bool isDecl = fal
         else if (fn.params[i].isConst && !fn.params[i].isUnique) out += "const ";
 
         std::string ucon = (fn.params[i].isConst && fn.params[i].isUnique ? "const " : "");
-        if (fn.params[i].name == "args" && cppType(fn.params[i].type, "params") == "std::vector<c_string>" && fn.name == "main") {
+        if (fn.params[i].name == "args" && cppType(fn.params[i].type, "params") == "std::vector<string>" && fn.name == "main") {
             out += "int argc, char** argv";
             anArgs = true;
         } else {
@@ -109,6 +109,7 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
     file << "#include <type_traits>\n";
     file << "#include <cnow.hpp>\n";
     file << "#include <cstart.hpp>\n\n";
+    file << "#include <cdef.hpp>\n";
 
     file << "inline void syncw_stdio(bool s) {\n";
     file << "   std::ios_base::sync_with_stdio(s);\n";
@@ -143,12 +144,13 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
                 file << emitSignature(d) << " {\n";
                 if (d.name == "main") file << indent(1) << "syncw_stdio(false);\n";
                 if (anArgs) {
-                    file << indent(1) << "std::vector<c_string> args;\n";
+                    file << indent(1) << "std::vector<string> args;\n";
                     file << indent(1) << "for (int i = 0; i < argc; i++) {\n";
                     file << indent(2) << "args.emplace_back(argv[i]);\n";
                     file << indent(1) << "}\n";
                 }
-                file << cg.emitBlock(pruneAndReport(d.body, "function '" + d.name + "'"), 1) << "}\n\n";
+                file << cg.emitBlock(pruneAndReport(d.body, "function '" + d.name + "'"), 1) 
+                     << (d.name == "main" ? (indent(1) + "return 0;\n") : "") << "}\n\n";
             }
             else if constexpr (std::is_same_v<T, TypeDecl>) {
                 file << cg.emitStmt(std::make_shared<TypeDecl>(d), 0);

@@ -74,8 +74,7 @@ public:
     }
 
     std::string visit(BinaryExpr& b) override {
-        if (b.op == "+") return "__cadd__(" + emitExpr(b.lhs) + ", " + emitExpr(b.rhs) + ")";
-        else if (b.op == "^") return "std::pow(" + emitExpr(b.lhs) + ", " + emitExpr(b.rhs) + ")";
+        if (b.op == "^") return "std::pow(" + emitExpr(b.lhs) + ", " + emitExpr(b.rhs) + ")";
         return "(" + emitExpr(b.lhs) + " " + b.op + " " + emitExpr(b.rhs) + ")";
     }
 

@@ -3,7 +3,7 @@
 
 #include <string>
 #include <memory>
-#include "inf.hpp"
+#include "cdef.hpp"
 
 namespace csm {
     template <typename T>

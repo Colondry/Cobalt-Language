@@ -34,10 +34,8 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"or", TokenType::OrOr},
 
     // Data Types
-    {"list", TokenType::List},
     {"vec", TokenType::TypeVector},
     {"int", TokenType::TypeInt},
-    {"str", TokenType::TypeStr},
     {"string", TokenType::TypeString},
     {"float", TokenType::TypeFloat},
     {"double", TokenType::TypeDouble},

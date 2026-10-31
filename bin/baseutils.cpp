@@ -26,7 +26,7 @@ bool Parser::isTypeToken(TokenType t, std::string type) {
         t == TokenType::TypeDouble || t == TokenType::TypeByte || t == TokenType::TypeChar ||
         t == TokenType::TypeBool || t == TokenType::TypeVoid || t == TokenType::TypeAuto
         || t == TokenType::TypeInt8 || t == TokenType::TypeInt16 || t == TokenType::TypeInt32
-        || t == TokenType::TypeInt64 || t == TokenType::TypeFrac || t == TokenType::TypeStr
+        || t == TokenType::TypeInt64 || t == TokenType::TypeFrac
         || t == TokenType::TypeLong || t == TokenType::TypeLonger
         || t == TokenType::TypeFloat16 || t == TokenType::TypeFloat32
         || t == TokenType::TypeFloat64 || t == TokenType::TypeFloat128 || t == TokenType::TypeFILE;
@@ -34,7 +34,7 @@ bool Parser::isTypeToken(TokenType t, std::string type) {
 
 bool Parser::looksLikeVarDecl() {
     TokenType t = peek().type;
-    if (t == TokenType::List || t == TokenType::TypeFrac) return true; // unambiguous keyword-led generics
+    if (t == TokenType::TypeVector || t == TokenType::TypeFrac) return true; // unambiguous keyword-led generics
     if (!isTypeToken(t, peek().text)) return false;
     if (t != TokenType::Identifier) return true; // built-in type keywords are never valid expression starts
     if (current + 1 >= tokens.size()) return false;
@@ -46,8 +46,7 @@ std::string Parser::typeName(std::string type, TokenType t) {
     std::string secElemType;
     switch (t) {
     case TokenType::TypeInt: return "int";
-    case TokenType::TypeStr: return "c_string";
-    case TokenType::TypeString: return "c_string";
+    case TokenType::TypeString: return "string";
     case TokenType::TypeFloat: return "float";
     case TokenType::TypeDouble: return "double";
     case TokenType::TypeByte: return "byte";
@@ -558,8 +557,8 @@ StmtPtr Parser::parseVarDecl(int c) {
         else c = 3;
         advance();
     }
-    if (check(TokenType::List) || check(TokenType::TypeVector)) {
-        advance(); // 'List' or 'vector'
+    if (check(TokenType::TypeVector)) {
+        advance(); // 'vec'
         decl->type = "List";
         expect(TokenType::Lt, "<");
         decl->elemType = expectType();
@@ -1074,7 +1073,7 @@ TypeDecl Parser::parseCTypeBody() {
     decl->name = nameTok.text;
     ctypeNames.insert(nameTok.text);
     expect(TokenType::Assign, "=");
-    if (check(TokenType::List)) {
+    if (check(TokenType::TypeVector)) {
         advance(); // 'List'
         decl->type = "List";
         expect(TokenType::Lt, "<");
@@ -1322,8 +1321,8 @@ StmtPtr Parser::parseInit(std::string name) {
                     p.init = lit;
                 }
             }
-            else if (check(TokenType::List) || check(TokenType::TypeVector)) {
-                advance(); // 'List' or 'Vector'
+            else if (check(TokenType::TypeVector)) {
+                advance(); // 'vec'
                 p.type = "List";
                 expect(TokenType::Lt, "<");
                 p.elemType = expectType();
@@ -1656,8 +1655,8 @@ FunctionDecl Parser::parseFunction() {
                     p.init = lit;
                 }
             }
-            else if (check(TokenType::List) || check(TokenType::TypeVector)) {
-                advance(); // 'List' or 'Vector'
+            else if (check(TokenType::TypeVector)) {
+                advance(); // 'vec'
                 p.type = "std::vector<";
                 expect(TokenType::Lt, "<");
                 p.elemType = expectType();

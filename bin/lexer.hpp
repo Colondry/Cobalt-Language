@@ -23,7 +23,6 @@ enum class TokenType {
     While, For, Repeat, Forever,
     In,
     Import,
-    List,
     Print, PrintLine, Read, ReadLine,
     PrintMac, PrintMacLn,
     Continue, Break,
@@ -37,7 +36,7 @@ enum class TokenType {
     TypeChar, TypeBool, TypeVoid, TypeAuto, TypeFrac,
     TypeLong, TypeInt8, TypeInt16, TypeInt32, TypeInt64,
     TypeLonger, TypeFloat16, TypeFloat32, TypeFloat64,
-    TypeFloat128, TypeStr, TypeFILE, Constant, ConstantPtr,
+    TypeFloat128, TypeFILE, Constant, ConstantPtr,
     TypeVector,
     // punctuation
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,

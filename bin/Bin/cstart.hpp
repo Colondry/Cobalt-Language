@@ -1,7 +1,7 @@
 #ifndef CSTART_HPP
 #define CSTART_HPP
 
-#include "inf.hpp"
+#include "cdef.hpp"
 #include "cotype.hpp"
 #include <memory>
 #include <string>

@@ -11,4 +11,15 @@ def main(vec<string> args): int {
     int num[4] = {10, 1, 8, 7}
     nunique int numbers[4] = {6, 5, 9, 4}
     println!("{} {}", num[3], numbers[0], x)
+
+    new m = Memory{512}
+    println!("{}", m.size)
+
+    m.set_size(256)
+    println!("{}", m.size)
+    m[0] = 'N'
+    m[1] = 7
+    println!("{} {}", m[0], m[1])
+    
+    ret 0 # memory m is automaticly deleted after goes out of scope
 }
