@@ -21,7 +21,7 @@ enum class TokenType {
     Fn, Ret, Lambda,
     If, Elif, Else,
     While, For, Repeat, Forever,
-    In,
+    In, As,
     Import,
     Print, PrintLine, Read, ReadLine,
     PrintMac, PrintMacLn,

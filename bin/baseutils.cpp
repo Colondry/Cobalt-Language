@@ -466,16 +466,6 @@ ExprPtr Parser::parsePrimary() {
         expect(TokenType::RParen, ")");
         return inner;
     }
-    if (check(TokenType::LBracket)) {
-        advance();
-        auto lit = std::make_shared<ArraysLit>();
-        if (!check(TokenType::RBracket)) {
-            lit->args.push_back(parseExpression());
-            while (match(TokenType::Comma)) lit->args.push_back(parseExpression());
-        }
-        expect(TokenType::RBracket, "]");
-        return lit;
-    }
     if (check(TokenType::Identifier)) {
         std::string name = advance().text;
         if (getVarState(name) == VariableState::Moved) {
@@ -492,6 +482,11 @@ ExprPtr Parser::parsePrimary() {
             return call;
         }
         auto ref = std::make_shared<NameExpr>();
+        if (match(TokenType::As)) {
+            ref->conv = true;
+            ref->type = expectType();
+        }
+        
         ref->name = name;
         return ref;
     }

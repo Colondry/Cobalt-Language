@@ -69,7 +69,10 @@ class NameExpr : public Expr {
     public: std::string name; 
     std::vector<ExprPtr> arrays;
     bool arr = false;
-    NameExpr(std::string n = "", std::vector<ExprPtr> a = {}, bool r = false) : name(std::move(n)), arrays(std::move(a)), arr(std::move(r)) {}
+
+    bool conv;
+    std::string type;
+    NameExpr(std::string n = "", std::vector<ExprPtr> a = {}, bool r = false, bool c = false, std::string t = "") : name(std::move(n)), arrays(std::move(a)), arr(std::move(r)), conv(c), type(std::move(t)) {}
     std::string accept(ExprVisitor& v) override;
 };
 class ListLit : public Expr { 

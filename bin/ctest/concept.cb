@@ -19,7 +19,7 @@ def main(vec<string> args): int {
     println!("{}", m.size)
     m[0] = 'N'
     m[1] = 7
-    println!("{} {}", m[0], m[1])
+    println!("{} {}", m[0], m[1] as double)
     
     ret 0 # memory m is automaticly deleted after goes out of scope
 }
