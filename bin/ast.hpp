@@ -37,6 +37,12 @@ public:
     ExprPtr value;
 };
 
+class ArraysLit : public Expr {
+public:
+    std::vector<ExprPtr> args;
+    ArraysLit(std::vector<ExprPtr> a = {}) : args(std::move(a)) {}
+    std::string accept(ExprVisitor& v) override;
+};
 class NumberLit : public Expr { 
 public:
     std::string value; 
@@ -61,7 +67,9 @@ class LnQuote : public Expr {
 }; // includes %"
 class NameExpr : public Expr { 
     public: std::string name; 
-    NameExpr(std::string n = "") : name(std::move(n)) {}
+    std::vector<ExprPtr> arrays;
+    bool arr = false;
+    NameExpr(std::string n = "", std::vector<ExprPtr> a = {}, bool r = false) : name(std::move(n)), arrays(std::move(a)), arr(std::move(r)) {}
     std::string accept(ExprVisitor& v) override;
 };
 class ListLit : public Expr { 
@@ -128,11 +136,12 @@ public:
     int arraySize = -1;       // >=0 for "char c[20]"
     ExprPtr init;             // never null -- every declaration requires an initializer (memory safety)
     bool isNull = false;      // always false; kept for structural compatibility
+    std::vector<ExprPtr> arr;
     bool c, cptr; 
     bool uns = true;
 
-    VarDecl(std::string t = "", std::string et = "", std::string set = "", std::string n = "", int as = -1, ExprPtr i = nullptr, bool c_ = false, bool cptr_ = false, bool uns_ = true) :
-        type(std::move(t)), elemType(std::move(et)), secElemType(std::move(set)), name(std::move(n)), arraySize(as), init(std::move(i)), c(c_), cptr(cptr_), uns(uns_) {}
+    VarDecl(std::string t = "", std::string et = "", std::string set = "", std::string n = "", int as = -1, ExprPtr i = nullptr, bool c_ = false, bool cptr_ = false, bool uns_ = true, std::vector<ExprPtr> a = {}) :
+        type(std::move(t)), elemType(std::move(et)), secElemType(std::move(set)), name(std::move(n)), arraySize(as), init(std::move(i)), c(c_), cptr(cptr_), uns(uns_), arr(std::move(a)) {}
     std::string accept(class StmtVisitor& v) override;
 };
 class TypeDecl : public Stmt {
@@ -232,6 +241,9 @@ class ContinueStmt : public Stmt {
     std::string accept(class StmtVisitor& v) override;
 };
 class ClearStmt : public Stmt {
+    std::string accept(class StmtVisitor& v) override;
+};
+class ArgsStmt : public Stmt {
     std::string accept(class StmtVisitor& v) override;
 };
 

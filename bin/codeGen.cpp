@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 namespace fs = std::filesystem;
+bool anArgs = false;
 
 static std::vector<StmtPtr> pruneAndReport(const std::vector<StmtPtr>& body, const std::string& where) {
     std::vector<std::string> warnings;
@@ -52,40 +53,43 @@ static std::string emitCFDSignature(const CFDecl& fn) {
     return out += ")";
 }
 
-static std::string emitLambSignature(const LambFuncDecl& fn) {
-    std::string out = "auto " + fn.name + " = [](";
-    for (size_t i = 0; i < fn.params.size(); i++) {
-        if (i) out += ", ";
-        out += cppType(fn.params[i].type) + " " + fn.params[i].name;
-    }
-    return out += ") -> " + cppType(fn.returnType);
-}
-
 static std::string emitCFSignature(const CFuncDecl& fn, const bool isDecl = false) {
     std::string out = (fn.inl ? "inline " : "") + cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
-        if (fn.params[i].isUnique) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
+        if (fn.params[i].isConstPtr && fn.params[i].isUnique) out += "const ";
+        else if (fn.params[i].isConst && !fn.params[i].isUnique) out += "const ";
+
+        std::string ucon = (fn.params[i].isConst && fn.params[i].isUnique ? "const " : "");
+        if (fn.params[i].isUnique) out += "std::unique_ptr<"+ ucon + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
         else out += cppType(fn.params[i].type, "param") + " " + fn.params[i].name;
         if (fn.params[i].arraySize >= 0) out += "[" + std::to_string(fn.params[i].arraySize) + "]";
         if (isDecl) {
-            if (fn.params[i].isUnique) out += " = std::make_unique<" + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type) + ")";
+            if (fn.params[i].isUnique) out += " = std::make_unique<" + ucon + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type) + ")";
             else if (fn.params[i].init) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type);
         }
     }
     return out += ")";
 }
-
 static std::string emitSignature(const FunctionDecl& fn, const bool isDecl = false) {
     std::string out = (fn.inl ? "inline " : "") + cppType(fn.returnType) + " " + fn.name + "(";
     for (size_t i = 0; i < fn.params.size(); i++) {
         if (i) out += ", ";
-        if (fn.params[i].isUnique) out += "std::unique_ptr<" + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
-        else out += cppType(fn.params[i].type, "param") + " " + fn.params[i].name;
-        if (fn.params[i].arraySize >= 0) out += "[" + std::to_string(fn.params[i].arraySize) + "]";
-        if (isDecl) {
-            if (fn.params[i].isUnique) out += " = std::make_unique<" + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type) + ")";
-            else if (fn.params[i].init) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type);
+        if (fn.params[i].isConstPtr && fn.params[i].isUnique) out += "const ";
+        else if (fn.params[i].isConst && !fn.params[i].isUnique) out += "const ";
+
+        std::string ucon = (fn.params[i].isConst && fn.params[i].isUnique ? "const " : "");
+        if (fn.params[i].name == "args" && cppType(fn.params[i].type, "params") == "std::vector<c_string>" && fn.name == "main") {
+            out += "int argc, char** argv";
+            anArgs = true;
+        } else {
+            if (fn.params[i].isUnique) out += "std::unique_ptr<" + ucon + cppType(fn.params[i].type, "param") + "> " + fn.params[i].name;
+            else out += cppType(fn.params[i].type, "params") + " " + fn.params[i].name;
+            if (fn.params[i].arraySize >= 0) out += "[" + std::to_string(fn.params[i].arraySize) + "]";
+            if (!fn.params[i].isUnsigned) {
+                if (fn.params[i].isUnique) out += " = std::make_unique<" + ucon + cppType(fn.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type) + ")";
+                else if (fn.params[i].init) out += " = " + CodeGenVisitor().emitExpr(fn.params[i].init, !fn.params[i].isUnique, fn.params[i].type);
+            }
         }
     }
     return out += ")";
@@ -138,6 +142,12 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
             } else if constexpr (std::is_same_v<T, FunctionDecl>) {
                 file << emitSignature(d) << " {\n";
                 if (d.name == "main") file << indent(1) << "syncw_stdio(false);\n";
+                if (anArgs) {
+                    file << indent(1) << "std::vector<c_string> args;\n";
+                    file << indent(1) << "for (int i = 0; i < argc; i++) {\n";
+                    file << indent(2) << "args.emplace_back(argv[i]);\n";
+                    file << indent(1) << "}\n";
+                }
                 file << cg.emitBlock(pruneAndReport(d.body, "function '" + d.name + "'"), 1) << "}\n\n";
             }
             else if constexpr (std::is_same_v<T, TypeDecl>) {

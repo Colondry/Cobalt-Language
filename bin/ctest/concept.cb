@@ -1,3 +1,14 @@
-def subtract(unique int a, int b): double {
-    ret a / b
+def main(vec<string> args): int {
+    int x = 0
+    for arg in args: 
+        println!("{}", arg)
+
+    if args.size() > 1 and args[1] == "write":
+        println!("Hello, World!")
+        
+    println!("{}", args.size())
+
+    int num[4] = {10, 1, 8, 7}
+    nunique int numbers[4] = {6, 5, 9, 4}
+    println!("{} {}", num[3], numbers[0], x)
 }

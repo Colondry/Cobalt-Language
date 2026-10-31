@@ -25,6 +25,7 @@ class MethodMemberExpr;
 class NamespaceCallExpr;
 class PointerExpr;
 class ConvertExpr;
+class ArraysLit;
 
 class AssignStmt;
 class ExprAssignStmt;
@@ -53,6 +54,7 @@ class ForeverCode;
 class TryExcept;
 class ConstructorStmt;
 class CInit;
+class ArgsStmt;
 
 class ExprVisitor {
 public:
@@ -77,6 +79,7 @@ public:
     virtual std::string visit(NamespaceCallExpr& n) { return ""; }
     virtual std::string visit(PointerExpr& p) { return ""; }
     virtual std::string visit(ConvertExpr& c) { return ""; }
+    virtual std::string visit(ArraysLit& a) { return ""; }
 };
 
 class StmtVisitor {
@@ -111,6 +114,7 @@ public:
     virtual std::string visit(TryExcept& t) { return ""; }
     virtual std::string visit(ConstructorStmt& c) { return ""; }
     virtual std::string visit(CInit& i) { return ""; }
+    virtual std::string visit(ArgsStmt& a) {return ""; }
 };
 
 

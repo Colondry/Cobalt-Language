@@ -53,10 +53,12 @@ public:
     std::string visit(LnQuote& l)   override { return l.value; }
 
     std::string visit(NameExpr& n) override {
-        if (Checker{}.varExists(n.name) && Checker{}.getPtrType(n.name) == VarType::Unique) {
-            return "(*(" + n.name + "))"; // automatic pointer dereference for unique pointers
+        std::string out = n.name;
+        if (Checker{}.varExists(n.name) && Checker{}.getPtrType(n.name) == VarType::Unique
+            && Checker{}.getPtrType(n.name) != VarType::Array) {
+            out = "(*(" + n.name + "))"; // automatic pointer dereference for unique pointers
         }
-        return n.name;
+        return out;
     }
 
     std::string visit(PostIncExpr& p) override { return "(" + emitExpr(p.name) + ")++"; }
@@ -161,6 +163,14 @@ public:
     std::string visit(ConvertExpr& c) override {
         return "csm::conv<" + cppType(c.targetType) + ">(" + emitExpr(c.target) + ")";
     }
+    std::string visit(ArraysLit& a) override {
+        std::string out = "[";
+        for (size_t i = 0; i < a.args.size(); ++i) {
+            if (i) out += ", ";
+            out += emitExpr(a.args[i]);
+        }
+        return out + "]";
+    }
 
     // Statement visitors
 
@@ -169,6 +179,9 @@ public:
         std::string constOnPtr     = (!v.uns && v.c)    ? "const " : "";
         std::string constOnVar     = (v.uns && v.c)     ? "const " : "";
         std::string pad            = indent(depth);
+        std::string array = " ";
+        bool anArray = (v.arraySize != -1 ? true : false);
+        if (v.arraySize != -1) array = "[" + std::to_string(v.arraySize) + "] ";
 
         if (v.type == "List") {
             std::string vecType = "std::vector<" + cppType(v.elemType) + ">";
@@ -200,14 +213,30 @@ public:
         std::string cppT = cppType(v.type);
         if (!v.uns) {
             std::string result = pad + constOnPtr + "std::unique_ptr<"
-                                 + constOnPointee + cppT + "> " + v.name;
-            if (v.init)
-                result += " = std::make_unique<" + constOnPointee + cppT + ">("
-                          + emitExpr(v.init, v.uns, cppT) + ")";
+                                 + constOnPointee + cppT + (anArray ? "[]" : "") + "> " + v.name;
+            if (v.init || v.arraySize != -1)
+                result += " = std::make_unique<" + constOnPointee + cppT + (anArray ? "[]" : "") + ">("
+                          + (anArray ? std::to_string(v.arraySize) : emitExpr(v.init, v.uns, cppT)) + ")";
+            if (anArray) {
+                result += ";\n";
+                for (int i = 0; i <= v.arraySize-1; ++i) {
+                    std::string a = emitExpr(v.arr[i]);
+                    result += pad + v.name + "[" + std::to_string(i) + "] = " + a + ";\n";
+                }
+                return result;
+            }
             return result + ";\n";
         }
-        std::string result = pad + constOnVar + cppT + " " + v.name;
-        if (v.init) result += " = (" + emitExpr(v.init, v.uns, cppT) + ")";
+        std::string result = pad + constOnVar + cppT + " " + v.name + array;
+        std::string a = "{";
+        if (anArray) {
+            for (size_t i = 0; i < v.arraySize; ++i) {
+                if (i) a += ", ";
+                a += emitExpr(v.arr[i]);
+            }
+        }
+        a += "}";
+        if (v.init || anArray) result += " = " + (anArray ? a : emitExpr(v.init, v.uns, cppT));
         return result + ";\n";
     }
 
@@ -297,6 +326,15 @@ public:
     std::string visit(ForeverCode& f) override {
         std::string out = indent(depth) + "while (true) {\n";
         out += emitBlock(f.body, depth + 1);
+        out += indent(depth) + "}\n";
+        return out;
+    }
+
+    std::string visit(ArgsStmt& a) override {
+        std::string out = "";
+        out += indent(depth) + "std::vector<c_string> args;\n";
+        out += indent(depth) + "for (int i = 0; i < argc; i++) {\n";
+        out += indent(depth + 1) + "args.emplace_back(argv[i]);\n";
         out += indent(depth) + "}\n";
         return out;
     }
@@ -404,11 +442,16 @@ public:
         std::string sig = (f.inl ? "inline " : "") + cppType(f.returnType) + " " + f.name + "(";
         for (size_t i = 0; i < f.params.size(); i++) {
             if (i) sig += ", ";
-            if (f.params[i].isUnique) sig += "std::unique_ptr<" + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
+            if (f.params[i].isConstPtr && f.params[i].isUnique) sig += "const ";
+            else if (f.params[i].isConst && !f.params[i].isUnique) sig += "const ";
+
+            std::string ucon = (f.params[i].isConst && f.params[i].isUnique ? "const " : "");
+
+            if (f.params[i].isUnique) sig += "std::unique_ptr<" + ucon + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
             else sig += cppType(f.params[i].type, "param") + " " + f.params[i].name;
             if (f.params[i].arraySize >= 0) sig += "[" + std::to_string(f.params[i].arraySize) + "]";
             if (!f.params[i].isUnsigned) {
-                if (f.params[i].isUnique) sig += " = std::make_unique<" + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
+                if (f.params[i].isUnique) sig += " = std::make_unique<" + ucon + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
                 else if (f.params[i].init) sig += " = " + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type);
             }
         }
@@ -422,11 +465,17 @@ public:
         std::string sig = (f.inl ? "inline " : "") + cppType(f.returnType) + " " + f.name + "(";
         for (size_t i = 0; i < f.params.size(); i++) {
             if (i) sig += ", ";
-            if (f.params[i].isUnique) sig += "std::unique_ptr<" + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
+
+            if (f.params[i].isConstPtr && f.params[i].isUnique) sig += "const ";
+            else if (f.params[i].isConst && !f.params[i].isUnique) sig += "const ";
+
+            std::string ucon = (f.params[i].isConst && f.params[i].isUnique ? "const " : "");
+
+            if (f.params[i].isUnique) sig += "std::unique_ptr<" + ucon + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
             else sig += cppType(f.params[i].type, "param") + " " + f.params[i].name;
             if (f.params[i].arraySize >= 0) sig += "[" + std::to_string(f.params[i].arraySize) + "]";
             if (!f.params[i].isUnsigned) {
-                if (f.params[i].isUnique) sig += " = std::make_unique<" + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
+                if (f.params[i].isUnique) sig += " = std::make_unique<" + ucon + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
                 else if (f.params[i].init) sig += " = " + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type);
             }
         }
@@ -441,11 +490,16 @@ public:
         std::string sig = "auto " + f.name + " = [](";
         for (size_t i = 0; i < f.params.size(); i++) {
             if (i) sig += ", ";
-            if (f.params[i].isUnique) sig += "std::unique_ptr<" + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
+            if (f.params[i].isConstPtr && f.params[i].isUnique) sig += "const ";
+            else if (f.params[i].isConst && !f.params[i].isUnique) sig += "const ";
+
+            std::string ucon = (f.params[i].isConst && f.params[i].isUnique ? "const " : "");
+
+            if (f.params[i].isUnique) sig += "std::unique_ptr<" + ucon + cppType(f.params[i].type, "param") + "> " + f.params[i].name;
             else sig += cppType(f.params[i].type, "param") + " " + f.params[i].name;
             if (f.params[i].arraySize >= 0) sig += "[" + std::to_string(f.params[i].arraySize) + "]";
             if (!f.params[i].isUnsigned) {
-                if (f.params[i].isUnique) sig += " = std::make_unique<" + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
+                if (f.params[i].isUnique) sig += " = std::make_unique<" + ucon + cppType(f.params[i].type, "param") + ">(" + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type) + ")";
                 else if (f.params[i].init) sig += " = " + CodeGenVisitor().emitExpr(f.params[i].init, !f.params[i].isUnique, f.params[i].type);
             }
         }
@@ -468,11 +522,16 @@ public:
         std::string out = indent(depth) + i.name + "(";
         for (size_t a = 0; a < i.params.size(); a++) {
             if (a) out += ", ";
-            if (i.params[a].isUnique) out += "std::unique_ptr<" + cppType(i.params[a].type, "param") + "> " + i.params[a].name;
+            if (i.params[a].isConstPtr && i.params[a].isUnique) out += "const ";
+            else if (i.params[a].isConst && !i.params[a].isUnique) out += "const ";
+
+            std::string ucon = (i.params[a].isConst && i.params[a].isUnique ? "const " : "");
+
+            if (i.params[a].isUnique) out += "std::unique_ptr<" + ucon + cppType(i.params[a].type, "param") + "> " + i.params[a].name;
             else out += cppType(i.params[a].type, "param") + " " + i.params[a].name;
             if (i.params[a].arraySize >= 0) out += "[" + std::to_string(i.params[a].arraySize) + "]";
             if (!i.params[a].isUnsigned) {
-                if (i.params[a].isUnique) out += " = std::make_unique<" + cppType(i.params[a].type, "param") + ">(" + CodeGenVisitor().emitExpr(i.params[a].init, !i.params[a].isUnique, i.params[a].type) + ")";
+                if (i.params[a].isUnique) out += " = std::make_unique<" + ucon + cppType(i.params[a].type, "param") + ">(" + CodeGenVisitor().emitExpr(i.params[a].init, !i.params[a].isUnique, i.params[a].type) + ")";
                 else if (i.params[a].init) out += " = " + CodeGenVisitor().emitExpr(i.params[a].init, !i.params[a].isUnique, i.params[a].type);
             }
         }

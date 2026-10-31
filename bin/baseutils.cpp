@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <filesystem>
 
+bool arg = false;
+
 // ---------- Type tokens ---------
 
 bool Parser::isTypeToken(TokenType t, std::string type) {
@@ -465,6 +467,16 @@ ExprPtr Parser::parsePrimary() {
         expect(TokenType::RParen, ")");
         return inner;
     }
+    if (check(TokenType::LBracket)) {
+        advance();
+        auto lit = std::make_shared<ArraysLit>();
+        if (!check(TokenType::RBracket)) {
+            lit->args.push_back(parseExpression());
+            while (match(TokenType::Comma)) lit->args.push_back(parseExpression());
+        }
+        expect(TokenType::RBracket, "]");
+        return lit;
+    }
     if (check(TokenType::Identifier)) {
         std::string name = advance().text;
         if (getVarState(name) == VariableState::Moved) {
@@ -513,6 +525,7 @@ std::vector<StmtPtr> Parser::parseBlock(std::string retype) {
 }
 // Example: 'try expression()'
 std::vector<StmtPtr> Parser::parseInlineBlock(std::string retype) {
+    expect(TokenType::Colon, ";");
     pushScope();
     pushConst();
     std::vector<StmtPtr> stmts;
@@ -632,16 +645,29 @@ StmtPtr Parser::parseVarDecl(int c) {
     Token nameTok = expect(TokenType::Identifier, "variable name");
     decl->name = nameTok.text;
     declareVar(decl->name, c);
-    VarType vtype = decl->uns ? VarType::NonUnique : VarType::Unique;
-    Checker{}.addVar(nameTok.text, vtype);
+    bool arr = false;
 
     if (match(TokenType::LBracket)) {
-        Token sizeTok = expect(TokenType::Number, "array size");
-        decl->arraySize = std::atoi(sizeTok.text.c_str());
+        arr = true;
+        decl->arraySize = check(TokenType::Number) ? std::atoi(expect(TokenType::Number, "array size").text.c_str()) : 0;
         expect(TokenType::RBracket, "]");
     }
-    if (match(TokenType::Assign)) decl->init = parseExpression();
+    if (match(TokenType::Assign)) {
+        if (decl->arraySize == -1) decl->init = parseExpression();
+        else {
+            expect(TokenType::LBrace, "{");
+            if (!check(TokenType::RBrace)) {
+                decl->arr.push_back(parseExpression());
+                while (match(TokenType::Comma))
+                    decl->arr.push_back(parseExpression());
+            }
+            expect(TokenType::RBrace, "}");
+        }
+    }
     else reportError("variable '" + decl->name + "' must be initialized -- declarations cannot be left without a value");
+    VarType vtype = decl->uns ? VarType::NonUnique : VarType::Unique;
+    if (arr) vtype = VarType::Array;
+    Checker{}.addVar(nameTok.text, vtype);
     return decl;
 }
 
@@ -799,14 +825,7 @@ StmtPtr Parser::parseIf() {
         expect(TokenType::Gt, ">");
     }
     stmt->condition = parseExpression();
-    if (check(TokenType::LBrace)) {
-        stmt->body = parseBlock(""); advance();
-    } else if (check(TokenType::Then)) {
-        advance(); // 'then'
-        stmt->body = parseInlineBlock("");
-    } else {
-        reportError("expected '{' or 'then' after if condition");
-    }
+    stmt->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     while (check(TokenType::Elif)) {
         ElifStmt elif{};
         if (check(TokenType::Elif)) {
@@ -829,15 +848,7 @@ StmtPtr Parser::parseIf() {
             }
 
             elif.condition = parseExpression();
-            
-            if (check(TokenType::LBrace)) {
-                elif.body = parseBlock(""); advance();
-            } else if (check(TokenType::Then)) {
-                advance(); // 'then'
-                elif.body = parseInlineBlock("");
-            } else {
-                reportError("expected '{' or 'then' after an elif condition");
-            }
+            (elif.body = check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
             stmt->elifs.push_back(std::move(elif));
         }
     }
@@ -860,14 +871,7 @@ StmtPtr Parser::parseIf() {
             expect(TokenType::Gt, ">");
         }
 
-        if (check(TokenType::LBrace)) {
-            stmt->elsebody = parseBlock(""); advance();
-        } else if (check(TokenType::Then)) {
-            advance(); // 'then'
-            stmt->elsebody = parseInlineBlock("");
-        } else {
-            reportError("expected '{' or 'then' after an else condition");
-        }
+        stmt->elsebody = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     }
     return stmt;
 }
@@ -876,14 +880,7 @@ StmtPtr Parser::parseWhile() {
     advance(); // 'while'
     auto stmt = std::make_shared<WhileStmt>();
     stmt->condition = parseExpression();
-    if (check(TokenType::LBrace)) {
-        stmt->body = parseBlock(""); advance();
-    } else if (check(TokenType::Do)) {
-        advance(); // 'do'
-        stmt->body = parseInlineBlock("");
-    } else {
-        reportError("expected '{' or 'do' after while condition");
-    }
+    stmt->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return stmt;
 }
 
@@ -891,14 +888,7 @@ StmtPtr Parser::parseRepeat() {
     advance(); // repeat
     auto value = std::make_shared<RepeatCode>();
     value->value = parseExpression();
-    if (check(TokenType::LBrace)) {
-        value->body = parseBlock(""); advance();
-    } else if (check(TokenType::Do)) {
-        advance(); // 'do'
-        value->body = parseInlineBlock("");
-    } else {
-        reportError("expected '{' or 'do' after repeat expression");
-    }
+    value->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return value;
 }
 
@@ -918,14 +908,7 @@ StmtPtr Parser::parseForRange() {
     stmt->varName = nameTok.text;
     stmt->condition = parseExpression();
     
-    if (check(TokenType::LBrace)) {
-        stmt->body = parseBlock(""); advance();
-    } else if (check(TokenType::Colon)) {
-        advance(); // ':'
-        stmt->body = parseInlineBlock("");
-    } else {
-        reportError("expected '{' or ':' after for range");
-    }
+    stmt->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return stmt;
 }
 
@@ -1074,7 +1057,7 @@ StmtPtr Parser::parseDo() {
 
     stmt->end = parseExpression();
     if (check(TokenType::LBrace)) {
-        stmt->body = parseBlock(""); advance();
+        stmt->body = parseBlock("");
     } else if (check(TokenType::Colon)) {
         advance(); // ':'
         stmt->body = parseInlineBlock("");
@@ -1184,9 +1167,29 @@ StmtPtr Parser::parseCFunction() {
     if (!check(TokenType::RParen)) {
         do {
             Param p;
+            while (check(TokenType::Unique) || check(TokenType::Constant) || check(TokenType::ConstantPtr)) {
+                if (check(TokenType::Unique)) {
+                    p.isUnique = true;
+                    advance();
+                }
+                if (check(TokenType::Constant)) {
+                    p.isConst = true;
+                    advance();
+                }
+                if (check(TokenType::ConstantPtr)) {
+                    p.isConstPtr = true;
+                    advance();
+                }
+                if (!p.isUnique && p.isConstPtr) {
+                    reportError("parameter cannot use 'const_ptr' without being unique_ptr.");
+                }
+            }
             p.type = expectType();
             p.name = expect(TokenType::Identifier, "parameter name").text;
             declareVar(p.name);
+
+            VarType vtype = !p.isUnique ? VarType::NonUnique : VarType::Unique;
+            Checker{}.addVar(p.name, vtype);
             fnd->params.push_back(p);
         } while (match(TokenType::Comma));
     }
@@ -1216,9 +1219,28 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
     if (!check(TokenType::RParen)) {
         do {
             Param p;
+            while (check(TokenType::Unique) || check(TokenType::Constant) || check(TokenType::ConstantPtr)) {
+                if (check(TokenType::Unique)) {
+                    p.isUnique = true;
+                    advance();
+                }
+                if (check(TokenType::Constant)) {
+                    p.isConst = true;
+                    advance();
+                }
+                if (check(TokenType::ConstantPtr)) {
+                    p.isConstPtr = true;
+                    advance();
+                }
+                if (!p.isUnique && p.isConstPtr) {
+                    reportError("parameter cannot use 'const_ptr' without being unique_ptr.");
+                }
+            }
             p.type = expectType();
             p.name = expect(TokenType::Identifier, "parameter name").text;
             declareVar(p.name);
+            VarType vtype = !p.isUnique ? VarType::NonUnique : VarType::Unique;
+            Checker{}.addVar(p.name, vtype);
             fnd->params.push_back(p);
         } while (match(TokenType::Comma));
     }
@@ -1340,6 +1362,8 @@ StmtPtr Parser::parseInit(std::string name) {
                 }
             }
             declareVar(p.name);
+            VarType vtype = !p.isUnique ? VarType::NonUnique : VarType::Unique;
+            Checker{}.addVar(p.name, vtype);
             stmt->params.push_back(p);
             count++;
         } while (match(TokenType::Comma));
@@ -1634,12 +1658,14 @@ FunctionDecl Parser::parseFunction() {
             }
             else if (check(TokenType::List) || check(TokenType::TypeVector)) {
                 advance(); // 'List' or 'Vector'
-                p.type = "List";
+                p.type = "std::vector<";
                 expect(TokenType::Lt, "<");
                 p.elemType = expectType();
                 expect(TokenType::Gt, ">");
-                p.name = expect(TokenType::Identifier, "parameter name").text;
 
+                p.type += p.elemType + ">";
+                p.name = expect(TokenType::Identifier, "parameter name").text;
+                
                 if (check(TokenType::Assign)) {
                     advance(); // '='
                     p.isUnsigned = false;
@@ -1672,6 +1698,8 @@ FunctionDecl Parser::parseFunction() {
                 }
             }
             declareVar(p.name, c);
+            VarType vtype = !p.isUnique ? VarType::NonUnique : VarType::Unique;
+            Checker{}.addVar(p.name, vtype);
             fn.params.push_back(p);
         } while (match(TokenType::Comma));
     }

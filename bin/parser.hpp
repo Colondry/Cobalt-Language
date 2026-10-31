@@ -27,7 +27,6 @@ public:
 
 
 private:
-
     std::vector<Token> tokens;
     std::string source;
     std::string inputFileDir; // directory of the .cb file being compiled
@@ -149,6 +148,7 @@ private:
     StmtPtr parseContinue();
     StmtPtr parseBreak();
     StmtPtr parseClear();
+    StmtPtr parseArgs();
     StmtPtr parsePrintMac();
     StmtPtr parseTryExcept();
     StmtPtr parseDo();

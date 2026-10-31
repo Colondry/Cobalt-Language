@@ -6,7 +6,6 @@
 
 // Type mapping from Cobalt's types to C++ types.
 inline std::string cppType(const std::string& t, const std::string& context = "") {
-    (void)context;
     if (t == "string") return "std::string";
     if (t == "byte") return "__byte__";
     if (t == "std::uint8_t") return "__byte__";

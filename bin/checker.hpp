@@ -6,7 +6,7 @@
 #include "parser.hpp"
 
 enum class VarType {
-    Unique, NonUnique
+    Unique, NonUnique, Array
 };
 
 struct VarInfo {

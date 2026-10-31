@@ -17,37 +17,26 @@ inline thread_local int cobalt__try_status__ = 0;
 inline int TryStatus() { return cobalt__try_status__; }
 
 
-#include <csystem.hpp>
-#include <cotype.hpp>
-#include <fsys.hpp>
-#include <errors.hpp>
-#include <runtime.hpp>
-#include <inf.hpp>
-#include <cstr.hpp>
-#include <fstream>
-#include <cstdio>
-class Math {
-public:
-    std::unique_ptr<int> x = std::make_unique<int>(0);
-    std::unique_ptr<int> y = std::make_unique<int>(0);
-    Math() = default;
-    Math(int x_ = 0, int y_ = 0)
-    {
-        (*(this->x)) = x_;
-        (*(this->y)) = y_;
-    }
-    int add() {
-        return __cadd__((*(x)), (*(y)));
-    }
-};
-int main() {
+int main(int argc, char** argv) {
     syncw_stdio(false);
-    Math m1{};
-    Math m2{10, 8};
-    Math m3{5};
-    println_c("{}", m1.add());
-    println_c("{}", m2.add());
-    println_c("{}", m3.add());
-    return 0;
+    std::vector<c_string> args;
+    for (int i = 0; i < argc; i++) {
+        args.emplace_back(argv[i]);
+    }
+    std::unique_ptr<int> x = std::make_unique<int>(0);
+    for (auto&& arg : args) {
+        println_c("{}", arg);
+    }
+    if (((args.size() > 1) && ((args)[1] == "write")))  {
+        println_c("Hello, World!");
+    }
+    println_c("{}", args.size());
+    std::unique_ptr<int[]> num = std::make_unique<int[]>(4);
+    num[0] = 10;
+    num[1] = 1;
+    num[2] = 8;
+    num[3] = 7;
+    int numbers[4]  = {6, 5, 9, 4};
+    println_c("{} {}", (num)[3], (numbers)[0], (*(x)));
 }
 
