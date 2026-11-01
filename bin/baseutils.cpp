@@ -291,17 +291,6 @@ ExprPtr Parser::parseUnary() {
         u->op = "-"; u->operand = operand;
         return u;
     }
-    if (check(TokenType::Tilde)) {
-        advance(); // ~
-        expect(TokenType::Lt, "expected '<' after '~' for type conversion");
-        std::string targetType = expectType();
-        expect(TokenType::Gt, "expected '>' after type name for type conversion");
-        expect(TokenType::LParen, "expected '(' after type conversion");
-        ExprPtr targetExpr = parseExpression();
-        expect(TokenType::RParen, "expected ')' after type conversion expression");
-        auto conv = std::make_shared<ConvertExpr>(targetType, targetExpr);
-        return conv;
-    }
 
     return parsePostfix();
 }
@@ -399,6 +388,10 @@ ExprPtr Parser::parsePostfix() {
                 m->member = member.text;
                 expr = m;
             }
+        }
+        else if (check(TokenType::As)) { // <expr> as <type>, e.g. m[1] as float
+            advance(); // 'as'
+            expr = std::make_shared<ConvertExpr>(expectType(), expr);
         }
         else if (match(TokenType::DoubleColon)) {
             Token member = expect(TokenType::Identifier, "member name after '::'");
@@ -1761,7 +1754,7 @@ Use Parser::parseUse() {
         reportError("expected 'module' or 'class' after 'use'");
     }
     Token nameTok = expect(TokenType::Identifier, "module name");
-    expect(TokenType::UseAs, "as");
+    expect(TokenType::As, "as");
     Token usedName = expect(TokenType::Identifier, "used name");
     use.first = nameTok.text;
     use.second = usedName.text;

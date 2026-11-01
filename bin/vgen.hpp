@@ -59,7 +59,7 @@ public:
             out = "(*(" + n.name + "))"; // automatic pointer dereference for unique pointers
         }
         if (n.conv) {
-            out = "csm::conv<" + cppType(n.type) + ">(" + n.name + ")";
+            out = "csm::conv<" + cppType(n.type) + ">(" + out + ")";
         }
         return out;
     }

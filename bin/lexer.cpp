@@ -6,7 +6,7 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     // Syntax
     {"def", TokenType::Fn}, {"ret", TokenType::Ret}, {"lambda", TokenType::Lambda},
     {"class", TokenType::Class}, {"public", TokenType::Public}, {"private", TokenType::Private},
-    {"autouse", TokenType::AutoUse}, {"use", TokenType::Use}, {"as", TokenType::UseAs},
+    {"autouse", TokenType::AutoUse}, {"use", TokenType::Use},
     {"module", TokenType::Module}, {"^", TokenType::Arrow_Up},
     {"struct", TokenType::Struct},
     {"if", TokenType::If}, {"elif", TokenType::Elif}, {"else", TokenType::Else},

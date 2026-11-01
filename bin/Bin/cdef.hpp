@@ -21,6 +21,9 @@
 #include <cstring>
 #include <vector>
 #include <charconv>
+#include <random>
+#include <cctype>
+#include <cmath>
 
 // Smart pointer and unique pointer unwraper
 template <typename T>
@@ -301,25 +304,64 @@ public:
     char data[MAX_SIZE] = "";
     size_t length = 0;
 
+    bool startsWith(const char* prefix) const {
+        if (!prefix) return false;
+        size_t prefix_len = std::strlen(prefix);
+        if (prefix_len > length) return false;
+        return std::strncmp(data, prefix, prefix_len) == 0;
+    }
+    bool endsWith(const char* suffix) const {
+        if (!suffix) return false;
+        size_t suffix_len = std::strlen(suffix);
+        if (suffix_len > length) return false;
+        return std::strncmp(data + length - suffix_len, suffix, suffix_len) == 0;
+    }
+    string substr(size_t start, size_t len) const {
+        if (start >= length) return string();
+        size_t actual_len = std::min(len, length - start);
+        return string(data + start, actual_len);
+    }
+    string substr(size_t start) const {
+        if (start >= length) return string();
+        return string(data + start, length - start);
+    }
+    string toUpper() const {
+        string result;
+        result.length = length;
+        for (size_t i = 0; i < length; ++i) {
+            result.data[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(data[i])));
+        }
+        result.data[result.length] = '\0';
+        return result;
+    }
+    string toLower() const {
+        string result;
+        result.length = length;
+        for (size_t i = 0; i < length; ++i) {
+            result.data[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(data[i])));
+        }
+        result.data[result.length] = '\0';
+        return result;
+    }
     static inline bool is_whitespace(char c) {
         return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v');
     }
     // Find character
-    int find(char target, size_t start_pos = 0) const {
+    size_t find(char target, size_t start_pos = 0) const {
         if (start_pos >= length) return -1;
         
         const char* ptr = data + start_pos;
         const char* end_ptr = data + length;
 
         while (ptr < end_ptr) {
-            if (*ptr == target) return static_cast<int>(ptr - data);
+            if (*ptr == target) return ptr - data;
             ptr++;
         }
         return -1;
     }
     // Fast Custom Find (Substring/Raw Buffer)
-    int find(const char* needle, size_t needle_len, size_t start_pos = 0) const {
-        if (needle_len == 0) return start_pos <= length ? static_cast<int>(start_pos) : -1;
+    size_t find(const char* needle, size_t needle_len, size_t start_pos = 0) const {
+        if (needle_len == 0) return start_pos <= length ? start_pos : -1;
         if (start_pos + needle_len > length || !needle) return -1;
 
         const char first = needle[0];
@@ -333,7 +375,7 @@ public:
                     i++;
                 }
                 if (i == needle_len) {
-                    return static_cast<int>(cur - data);
+                    return cur - data; // Found the substring, return the index
                 }
             }
             cur++;
@@ -342,11 +384,11 @@ public:
     }
 
     // Overloads for string
-    int find(const string& needle, size_t start_pos = 0) const {
+    size_t findf(const string& needle, size_t start_pos = 0) const {
         return find(needle.data, needle.length, start_pos);
     }
 
-    int find(const char* needle, size_t start_pos = 0) const {
+    size_t findf(const char* needle, size_t start_pos = 0) const {
         if (!needle) return -1;
         size_t n_len = 0;
         while (needle[n_len] != '\0') n_len++;
@@ -599,7 +641,7 @@ public:
     }
     // reallocate memory (new elements are zero-filled)
     void realloc(size_t s) {
-        if (ptr == nullptr) throw std::runtime_error("Segmentation fault (Memory dumped)");
+        if (ptr == nullptr) throw std::runtime_error("Memory is freed");
         T* temp = static_cast<T*>(std::realloc(ptr, s * sizeof(T)));
         if (!temp && s != 0) throw std::runtime_error("realloc failed");
         if (temp && s > size) std::memset(static_cast<void*>(temp + size), 0, (s - size) * sizeof(T));
@@ -607,7 +649,7 @@ public:
     }
     // frees memory
     void free() {
-        if (ptr == nullptr) throw std::runtime_error("Segmentation fault (Double or more free)");
+        if (ptr == nullptr) throw std::runtime_error("Memory is already freed");
         std::free(ptr);
         ptr = nullptr;
         size = 0;
@@ -615,3 +657,27 @@ public:
 private:
     T* ptr = nullptr;
 };
+
+namespace csm {
+    long double rand(long double min, long double max) {
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        std::uniform_real_distribution<long double> dist(min, max);
+        return dist(gen);
+    }
+    long double rand_stable(long double min, long double max) {
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static long double previous = (min + max) / 2;
+        std::uniform_real_distribution<long double> dist(min, max);
+        long double target = dist(gen);
+        previous = previous * 0.8 + target * 0.2;
+        return previous;
+    }
+    namespace Time {
+        inline clock_t Now() { return std::clock(); }
+        inline long double Elapsed(clock_t start, clock_t end) {
+            return static_cast<long double>(end - start) / CLOCKS_PER_SEC;
+        }
+    }
+}

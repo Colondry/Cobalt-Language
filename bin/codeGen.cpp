@@ -196,7 +196,6 @@ void codeGen(Program& program, std::string fileName, const std::string& inputFil
                 file << "#include <fsys.hpp>\n";
                 file << "#include <errors.hpp>\n";
                 file << "#include <runtime.hpp>\n";
-                file << "#include <inf.hpp>\n";
                 file << "#include <cstr.hpp>\n";
                 file << "#include <fstream>\n";
                 file << "#include <cstdio>\n";

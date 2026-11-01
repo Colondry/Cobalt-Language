@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
     println_c("{}", m.size);
     (m)[0] = 'N';
     (m)[1] = 7;
-    println_c("{} {}", csm::conv<std::string>((m)[0]), (m)[1]);
+    println_c("{} {} {}", (m)[0], csm::conv<float>((m)[1]), csm::conv<double>((*(x))));
     return 0;
     return 0;
 }
