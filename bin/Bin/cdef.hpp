@@ -1,4 +1,3 @@
-#pragma once
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -24,6 +23,11 @@
 #include <random>
 #include <cctype>
 #include <cmath>
+#include "cotype.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 // Smart pointer and unique pointer unwraper
 template <typename T>
@@ -297,7 +301,7 @@ inline void println_c(std::string_view fmt, Args&&... args) {
 inline void print_c(std::string_view fmt) {
     std::cout << fmt;
 }
-
+template <typename T1, typename T2>
 class string {
 public:
     static constexpr size_t MAX_SIZE = 5012;
@@ -387,13 +391,70 @@ public:
     size_t findf(const string& needle, size_t start_pos = 0) const {
         return find(needle.data, needle.length, start_pos);
     }
-
     size_t findf(const char* needle, size_t start_pos = 0) const {
         if (!needle) return -1;
         size_t n_len = 0;
         while (needle[n_len] != '\0') n_len++;
         return find(needle, n_len, start_pos);
     }
+    // Replace words from the string with another word
+    string& replace(const char* target, const char* replacement = "") {
+        if (!target || target[0] == '\0') return *this; // Nothing to replace
+
+        size_t target_len = std::strlen(target);
+        size_t repl_len = replacement ? std::strlen(replacement) : 0;
+
+        int pos = find(target, target_len, 0);
+        if (pos == -1) return *this; // Target not found
+
+        // Calculate new length
+        size_t new_length = length - target_len + repl_len;
+        if (new_length >= MAX_SIZE) new_length = MAX_SIZE - 1;
+
+        // Move the tail part of the string to make space for replacement
+        if (repl_len != target_len) {
+            std::memmove(data + pos + repl_len, data + pos + target_len, length - (pos + target_len));
+        }
+
+        // Copy the replacement into position
+        if (repl_len > 0) {
+            std::memcpy(data + pos, replacement, repl_len);
+        }
+
+        length = new_length;
+        data[length] = '\0'; // Null-terminate
+        return *this;
+    }string& replace(const string& target, const string& replacement = "")
+     {
+        return replace(target.data, replacement.data);
+    }
+    string& replace(T1& target, T2& replacement) {
+        decltype(auto) u_target = unwrap_val(target);
+        decltype(auto) u_replacement = unwrap_val(replacement);
+
+        if constexpr (std::is_convertible_v<decltype(u_target), const char*> &&
+                      std::is_convertible_v<decltype(u_replacement), const char*>) {
+            return replace(static_cast<const char*>(u_target), static_cast<const char*>(u_replacement));
+        } else {
+            return *this; // No-op if types are not convertible to const char*
+        }
+    }
+    // Erase words from the string
+    string& erase(const char* target) {
+        return replace(target, "");
+    }
+    string& erase(const string& target) {
+        return replace(target.data, "");
+    }
+    string& erase(T1& target) {
+        decltype(auto) u_target = unwrap_val(target);
+        if constexpr (std::is_convertible_v<decltype(u_target), const char*>) {
+            return erase(static_cast<const char*>(u_target));
+        } else {
+            return *this; // No-op if type is not convertible to const char*
+        }
+    }
+
 
     string() : length(0) { data[0] = '\0'; } // Default Constructor
     string(const char* str) { assign(str); } // String constructor
@@ -659,13 +720,15 @@ private:
 };
 
 namespace csm {
-    long double rand(long double min, long double max) {
+    // Random number generation
+    inline long double rand(long double min, long double max) {
         static std::random_device rd;
         static std::mt19937 gen(rd());
         std::uniform_real_distribution<long double> dist(min, max);
         return dist(gen);
     }
-    long double rand_stable(long double min, long double max) {
+    // Stable random number generation
+    inline long double rand_stable(long double min, long double max) {
         static std::random_device rd;
         static std::mt19937 gen(rd());
         static long double previous = (min + max) / 2;
@@ -673,10 +736,142 @@ namespace csm {
         long double target = dist(gen);
         previous = previous * 0.8 + target * 0.2;
         return previous;
+    } 
+    // Clear the console screen
+    void clear() {
+        #ifdef _WIN32 // if Windows
+            std::system("cls");
+        #else // Other than Windows
+            std::system("clear");
+        #endif
     }
+    // Clear the last \n lines in the console
+    void clear(int lines) {
+        if (lines <= 0) return;
+        #ifdef _WIN32
+            HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+            if (hOut == INVALID_HANDLE_VALUE) return;
+
+            DWORD dwMode = 0;
+            if (!GetConsoleMode(hOut, &dwMode)) return;
+
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        #endif
+        #ifdef _WIN32
+            for (int i = 0; i < lines; ++i) {
+                std::cout << "\r" << std::string(80, ' ') << "\r";
+            }
+        #else
+            for (int i = 0; i < lines; ++i) {
+                std::cout << "\033[1A\033[2K"; // Move up and clear line
+            }
+        #endif
+    }
+
+    // Type traits
+    template <typename T> struct is_unique_ptr : std::false_type {};
+    template <typename T, typename D>
+    struct is_unique_ptr<std::unique_ptr<T, D>> : std::true_type {};
+    template <typename T>
+    inline constexpr bool is_unique_ptr_v = is_unique_ptr<std::remove_cv_t<T>>::value;
+
+    template <typename T> struct is_shared_ptr : std::false_type {};
+    template <typename T>
+    struct is_shared_ptr<std::shared_ptr<T>> : std::true_type {};
+    template <typename T>
+    inline constexpr bool is_shared_ptr_v = is_shared_ptr<std::remove_cv_t<T>>::value;
+
+    template <typename T> struct is_frac : std::false_type {};
+    template <typename A, typename B> struct is_frac<frac<A, B>> : std::true_type {};
+
+    template <typename T> struct is_vector : std::false_type {};
+    template <typename T, typename A> struct is_vector<std::vector<T, A>> : std::true_type {};
+
+    template <typename> inline constexpr bool always_false_v = false;
+
+    // Convertion Utilities
+    template <typename To, typename From>
+    [[nodiscard]] To conv(From&& value) {
+        using F = std::decay_t<From>;   // ← decay, not remove_cv/remove_ref
+
+        // ---- Same type ----
+        if constexpr (std::is_same_v<To, F>) {
+            return std::forward<From>(value);
+        }
+        // ---- Unwrap smart pointers ----
+        else if constexpr (is_unique_ptr_v<F>) {
+            if (!value) throw std::runtime_error("csm::conv: null unique_ptr");
+            return conv<To>(*value);
+        }
+        else if constexpr (is_shared_ptr_v<F>) {
+            if (!value) throw std::runtime_error("csm::conv: null shared_ptr");
+            return conv<To>(*value);
+        }
+        // ---- From string-like ----
+        else if constexpr (std::is_same_v<F, std::string> ||
+                        std::is_same_v<F, std::string_view> ||
+                        std::is_same_v<F, const char*> ||
+                        std::is_same_v<F, char*>) {
+            if      constexpr (std::is_same_v<To, int>)         return toInt(value);
+            else if constexpr (std::is_same_v<To, long>)        return toLong(value);
+            else if constexpr (std::is_same_v<To, double>)      return toDouble(value);
+            else if constexpr (std::is_same_v<To, long double>) return toLonger(value);
+            else if constexpr (std::is_same_v<To, char>)        return toChar(value);
+            else if constexpr (std::is_same_v<To, bool>)        return toInt(value) != 0;
+            else throw std::runtime_error("csm::conv: unsupported conversion from string-like type");
+        }
+        // ---- To string ----
+        else if constexpr (std::is_same_v<To, std::string>) {
+            return toStr(value);
+        }
+        // ---- To bool ----
+        else if constexpr (std::is_same_v<To, bool>) {
+            if constexpr (std::is_arithmetic_v<F>) return value != 0;
+            else throw std::runtime_error("csm::conv: unsupported conversion to bool");
+        }
+        // ---- Arithmetic → arithmetic ----
+        else if constexpr (std::is_arithmetic_v<To> && std::is_arithmetic_v<F>) {
+            return static_cast<To>(value);
+        }
+        // ---- Arithmetic → frac ----
+        else if constexpr (is_frac<To>::value && std::is_arithmetic_v<F>) {
+            return To{
+                static_cast<typename To::first_type>(value),
+                static_cast<typename To::second_type>(1)
+            };
+        }
+        // ---- Anything → vector of one element ----
+        else if constexpr (is_vector<To>::value) {
+            using Elem = typename To::value_type;
+            return To{conv<Elem>(std::forward<From>(value))};
+        } else {
+            throw std::runtime_error("csm::conv: unsupported conversion");
+        }
+    }
+
+    // To unique_ptr
+    template <typename T>
+    [[nodiscard]] std::unique_ptr<std::decay_t<T>>
+    asUnique(T&& value) {
+        return std::make_unique<std::decay_t<T>>(std::forward<T>(value));
+    }
+    // To shared_ptr
+    template <typename T>
+    [[nodiscard]] std::shared_ptr<std::decay_t<T>>
+    asSharedPtr(T&& value) {
+        return std::make_shared<std::decay_t<T>>(std::forward<T>(value));
+    }
+    // To raw pointer
+    template <typename T>
+    [[nodiscard]] T* asRaw(T& value) noexcept {
+        return std::addressof(value);
+    }
+
+    // Time utilities
     namespace Time {
-        inline clock_t Now() { return std::clock(); }
-        inline long double Elapsed(clock_t start, clock_t end) {
+        [[nodiscard]] inline clock_t Now() { return std::clock(); }
+        [[nodiscard]] inline long double Elapsed(clock_t start, clock_t end) {
             return static_cast<long double>(end - start) / CLOCKS_PER_SEC;
         }
     }
