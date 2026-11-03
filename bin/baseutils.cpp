@@ -553,6 +553,9 @@ StmtPtr Parser::parseVarDecl(int c) {
         expect(TokenType::Gt, ">");
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
+        if (isVarDeclared(decl->name)) {
+            reportError("Variable '" + decl->name + "' is already declared in this scope.");
+        }
         declareVar(decl->name, c);
         VarType vtype = decl->uns ? VarType::NonUnique : VarType::Unique;
         Checker{}.addVar(nameTok.text, vtype);
@@ -592,6 +595,9 @@ StmtPtr Parser::parseVarDecl(int c) {
         expect(TokenType::Gt, ">");
         Token nameTok = expect(TokenType::Identifier, "variable name");
         decl->name = nameTok.text;
+        if (isVarDeclared(decl->name)) {
+            reportError("Variable '" + decl->name + "' is already declared in this scope.");
+        }
         declareVar(decl->name, c);
         VarType vtype = decl->uns ? VarType::NonUnique : VarType::Unique;
         Checker{}.addVar(decl->name, vtype);
@@ -631,6 +637,9 @@ StmtPtr Parser::parseVarDecl(int c) {
     decl->type = expectType();
     Token nameTok = expect(TokenType::Identifier, "variable name");
     decl->name = nameTok.text;
+    if (isVarDeclared(decl->name)) {
+        reportError("Variable '" + decl->name + "' is already declared in this scope.");
+    }
     declareVar(decl->name, c);
     bool arr = false;
 
@@ -692,12 +701,15 @@ StmtPtr Parser::parseAssignOrExprStatement() {
         tokens[current + 1].type == TokenType::DoubleColon_Assign) {
         std::string name = advance().text;
         advance(); // ':='
+        if (isVarDeclared(name)) {
+            reportError("Variable '" + name + "' is already declared in this scope.");
+        }
         auto stmt = std::make_shared<VarDecl>();
         stmt->name = name;
         stmt->uns = uns; stmt->c = con; stmt->cptr = cptr;
         stmt->init = parseExpression();
         if (auto strExpr = std::dynamic_pointer_cast<StringLit>(stmt->init)) {
-            stmt->type = "c_string";
+            stmt->type = "string";
         }
         else if (auto numExpr = std::dynamic_pointer_cast<NumberLit>(stmt->init)) {
             stmt->type = "long long";
@@ -867,6 +879,7 @@ StmtPtr Parser::parseWhile() {
     advance(); // 'while'
     auto stmt = std::make_shared<WhileStmt>();
     stmt->condition = parseExpression();
+    Checker{}.updateScope(Current::Loop);
     stmt->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return stmt;
 }
@@ -875,12 +888,14 @@ StmtPtr Parser::parseRepeat() {
     advance(); // repeat
     auto value = std::make_shared<RepeatCode>();
     value->value = parseExpression();
+    Checker{}.updateScope(Current::Loop);
     value->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return value;
 }
 
 StmtPtr Parser::parseForever() {
     advance(); // forever
+    Checker{}.updateScope(Current::Loop);
     auto stmt = std::make_shared<ForeverCode>();
     stmt->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return stmt;
@@ -894,6 +909,7 @@ StmtPtr Parser::parseForRange() {
     expect(TokenType::In, "'in'");
     stmt->varName = nameTok.text;
     stmt->condition = parseExpression();
+    Checker{}.updateScope(Current::Loop);
     
     stmt->body = (check(TokenType::LBrace) ? parseBlock("") : parseInlineBlock(""));
     return stmt;
@@ -1003,11 +1019,17 @@ StmtPtr Parser::parseReadLineCode() {
 
 StmtPtr Parser::parseContinue() {
     advance(); // 'continue'
+    if (!Checker{}.isInScope(Current::Loop)) {
+        reportError("'continue' statement is not inside a loop");
+    }
     return std::make_shared<ContinueStmt>();
 }
 
 StmtPtr Parser::parseBreak() {
     advance(); // 'break'
+    if (!Checker{}.isInScope(Current::Loop)) {
+        reportError("'break' statement is not inside a loop");
+    }
     return std::make_shared<BreakStmt>();
 }
 
@@ -1186,7 +1208,7 @@ StmtPtr Parser::parseCFunction() {
         fnd->returnType = expectType();
     }
     else [[unlikely]] fnd->returnType = (fnd->name == "main" ? "int" : "auto");
-
+    Checker{}.updateScope(Current::Function);
     fnd->body = parseCFBlock(fnd->returnType);
     popConst();
     popScope();
@@ -1239,6 +1261,7 @@ StmtPtr Parser::parseLambdaFn(std::string retype) {
     else [[unlikely]] {
         fnd->returnType = "auto";
     }
+    Checker{}.updateScope(Current::Function);
     fnd->body = parseCFBlock(fnd->returnType);
     popConst();
     popScope();
@@ -1356,6 +1379,7 @@ StmtPtr Parser::parseInit(std::string name) {
         } while (match(TokenType::Comma));
     }
     expect(TokenType::RParen, ")");
+    Checker{}.updateScope(Current::Constructor);
     if (check(TokenType::Colon)) [[unlikely]] {
         advance();
         stmt->body = parseInlineBlock("");
@@ -1703,8 +1727,9 @@ FunctionDecl Parser::parseFunction() {
             fn.returnType = "auto";
         }
     }
+    Checker{}.updateScope(Current::Function);
     if (check(TokenType::LBrace)) {
-        fn.body = parseCFBlock(fn.returnType);
+        fn.body = parseBlock(fn.returnType);
     }
     else if (check(TokenType::Colon)) {
         advance(); // ':'
@@ -1726,6 +1751,7 @@ ClassDecl Parser::parseClasses() {
     ClassDecl cls;
     cls.name = nameCls.text;
     Checker{}.addClass(cls.name);
+    Checker{}.updateScope(Current::Class);
     parseCBlock(cls);
 
     return cls;
@@ -1737,6 +1763,7 @@ StructCode Parser::parseStruct() {
 
     StructCode str;
     str.name = nameStr.text;
+    Checker{}.updateScope(Current::Struct);
     parseSBlock(str);
     Checker{}.addStruct(str.name);
 
@@ -1780,6 +1807,7 @@ ModuleDecl Parser::parseModule() {
     advance(); // 'module'
     Token nameTok = expect(TokenType::Identifier, "module name");
     ModuleDecl mod;
+    Checker{}.updateScope(Current::Module);
     parseModuleBlock(mod);
     mod.name = nameTok.text;
 

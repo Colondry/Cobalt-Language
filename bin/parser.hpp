@@ -86,6 +86,13 @@ private:
         }
     }
 
+    bool isVarDeclared(const std::string& name) {
+        for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
+            if (it->find(name) != it->end()) return true;
+        }
+        return false;
+    }
+
     // ---------- Core cursor / matching infra (defined in parser.cpp) ----------
     const Token& peek() const;
     const Token& peekNext() const;
