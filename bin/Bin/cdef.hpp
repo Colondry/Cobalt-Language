@@ -720,23 +720,61 @@ private:
 };
 
 namespace csm {
-    // Random number generation
-    inline long double rand(long double min, long double max) {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        std::uniform_real_distribution<long double> dist(min, max);
-        return dist(gen);
+    // Random value in [min, max). rand() or rand(0, 0) gives [0, 1).
+    inline long double rand(long double min = 0.0L, long double max = 1.0L) {
+        if (!std::isfinite(min) || !std::isfinite(max))
+            return std::numeric_limits<long double>::quiet_NaN();
+
+        if (min == 0 && max == 0) max = 1;          // default mode
+        if (min > max) std::swap(min, max);
+        if (min == max) return min;
+
+        auto engine = []() -> std::mt19937_64& {
+            static thread_local std::mt19937_64 gen{[] {
+                std::random_device rd;
+                std::seed_seq seq{rd(), rd(), rd(), rd()};
+                std::mt19937_64 g(seq);
+                return g;
+            }()};
+            return gen;
+        }();
+
+        constexpr int bits = std::numeric_limits<long double>::digits;
+        long double u = std::generate_canonical<long double, bits>(engine); // [0,1)
+        if (u >= 1.0L) u = std::nextafter(1.0L, 0.0L);
+
+        // Lerp form avoids overflow of (max - min) for huge ranges
+        long double v = min * (1.0L - u) + max * u;
+        if (v >= max) v = std::nextafter(max, min); // keep half-open
+        if (v < min)  v = min;
+        return v;
     }
-    // Stable random number generation
-    inline long double rand_stable(long double min, long double max) {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static long double previous = (min + max) / 2;
-        std::uniform_real_distribution<long double> dist(min, max);
-        long double target = dist(gen);
-        previous = previous * 0.8 + target * 0.2;
+
+    // Smoothed random walk: successive values drift instead of jumping.
+    inline long double rand_stable(long double min = 0.0L, long double max = 0.0L,
+                                long double smoothing = 0.8L) {
+        if (!std::isfinite(min) || !std::isfinite(max))
+            return std::numeric_limits<long double>::quiet_NaN();
+        if (min == 0 && max == 0) max = 1;    
+        if (min > max) std::swap(min, max);
+        if (min == max) return min;
+
+        static thread_local bool init = false;
+        static thread_local long double lo = 0, hi = 0, previous = 0;
+
+        if (!init || lo != min || hi != max) {
+            lo = min; hi = max;
+            previous = min / 2 + max / 2;           // overflow-safe midpoint
+            init = true;
+        }
+
+        smoothing = std::clamp(smoothing, 0.0L, 0.999999L);
+        const long double target = rand(min, max);
+        previous = previous * smoothing + target * (1.0L - smoothing);
+        previous = std::clamp(previous, min, max);  // guard against rounding drift
         return previous;
-    } 
+    }
+
     // Clear the console screen
     void clear() {
         #ifdef _WIN32 // if Windows
